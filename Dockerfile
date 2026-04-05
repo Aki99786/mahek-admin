@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # Build stage
 FROM node:20-alpine AS builder
 
@@ -7,13 +9,20 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # Copy source code
 COPY . .
 
 ARG VITE_API_BASE_URL
+ARG VITE_CLOUDINARY_BASE_URL
+ARG VITE_CLOUDINARY_CLOUD_NAME
+ARG VITE_CLOUDINARY_UPLOAD_PRESET
+
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_CLOUDINARY_BASE_URL=$VITE_CLOUDINARY_BASE_URL
+ENV VITE_CLOUDINARY_CLOUD_NAME=$VITE_CLOUDINARY_CLOUD_NAME
+ENV VITE_CLOUDINARY_UPLOAD_PRESET=$VITE_CLOUDINARY_UPLOAD_PRESET
 
 # Build the application
 RUN npm run build
