@@ -7,8 +7,8 @@ on:
       - develop
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ secrets.GCP_REGION }}
+  PROJECT_ID: mahek-deploy
+  REGION: asia-south1
   REPOSITORY: mahek-admin
   IMAGE: admin
   # Cloudinary (public values — safe to hardcode)
