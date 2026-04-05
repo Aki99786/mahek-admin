@@ -1,0 +1,74 @@
+name: Deploy Admin
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+env:
+  PROJECT_ID: mahek-deploy
+  REGION: asia-south1
+  REPOSITORY: mahek-admin
+  IMAGE: admin
+  # Cloudinary (public values — safe to hardcode)
+  VITE_CLOUDINARY_BASE_URL: https://api.cloudinary.com/v1_1/
+  VITE_CLOUDINARY_CLOUD_NAME: dhgylinef
+  VITE_CLOUDINARY_UPLOAD_PRESET: Mahek_preset
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker $REGION-docker.pkg.dev
+
+      - name: Select service and API URL based on branch
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "SERVICE_NAME=admin-prod"                                          >> $GITHUB_ENV
+            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_PROD }}"         >> $GITHUB_ENV
+          else
+            echo "SERVICE_NAME=admin-staging"                                       >> $GITHUB_ENV
+            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_STAGING }}"      >> $GITHUB_ENV
+          fi
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
+            --build-arg VITE_CLOUDINARY_BASE_URL="$VITE_CLOUDINARY_BASE_URL" \
+            --build-arg VITE_CLOUDINARY_CLOUD_NAME="$VITE_CLOUDINARY_CLOUD_NAME" \
+            --build-arg VITE_CLOUDINARY_UPLOAD_PRESET="$VITE_CLOUDINARY_UPLOAD_PRESET" \
+            -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ github.sha }} .
+
+      - name: Push Docker image
+        run: |
+          docker push $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE_NAME \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=3 \
+            --memory=512Mi \
+            --cpu=1 \
+            --port=8080

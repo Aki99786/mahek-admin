@@ -41,8 +41,10 @@ import {
   Link,
   List,
   Underline,
+  Font
 } from "ckeditor5";
 import "ckeditor5/ckeditor5.css";
+// import Font from '@ckeditor/ckeditor5-font/src/font';
 
 // Available sizes for selection
 const AVAILABLE_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
@@ -1722,6 +1724,7 @@ const AddEditProductPage = () => {
                             List,
                             Undo,
                             Underline,
+                            Font
                           ],
                           toolbar: [
                             "undo",
@@ -1735,6 +1738,8 @@ const AddEditProductPage = () => {
                             "numberedList",
                             "|",
                             "link",
+                            "fontColor",
+                            "fontBackgroundColor"
                           ],
                           placeholder: "Enter product description...",
                         }}

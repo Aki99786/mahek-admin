@@ -187,7 +187,7 @@ const ProductDetailPage = () => {
     queryFn: async () => {
       const res = await getProductById(id!);
       // Handle both response formats
-      return (res as { data?: ProductApiResponse }).data ?? (res as ProductApiResponse);
+      return (res as { data?: ProductApiResponse }).data ?? (res as unknown as ProductApiResponse);
     },
     enabled: Boolean(id),
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
