@@ -10,7 +10,7 @@ on:
 env:
   IMAGE_NAME: mahek-admin
   PROJECT_ID: mahek-deploy
-  REGION: asia-east1
+  REGION: asia-south1
   REGISTRY_REGION: asia-south1
   REPOSITORY: mahek-repo
 
