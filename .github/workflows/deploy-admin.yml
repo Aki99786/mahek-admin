@@ -9,9 +9,14 @@ on:
 
 env:
   IMAGE_NAME: mahek-admin
+  PROJECT_ID: mahek-deploy
   REGION: asia-east1
   REGISTRY_REGION: asia-south1
   REPOSITORY: mahek-repo
+
+  VITE_CLOUDINARY_BASE_URL: ${{ secrets.VITE_CLOUDINARY_BASE_URL }}
+  VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
+  VITE_CLOUDINARY_UPLOAD_PRESET: ${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
 
 jobs:
   deploy:
@@ -57,19 +62,19 @@ jobs:
         run: |
           docker build \
             --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
-            -t $REGISTRY_REGION-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$REPOSITORY/$IMAGE_NAME:${{ github.sha }} .
+            -t $REGISTRY_REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:${{ github.sha }} .
 
 
       - name: Push Docker image
         run: |
           docker push \
-          $REGISTRY_REGION-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$REPOSITORY/$IMAGE_NAME:${{ github.sha }}
+          $REGISTRY_REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:${{ github.sha }}
 
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy $SERVICE \
-            --image=$REGISTRY_REGION-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$REPOSITORY/$IMAGE_NAME:${{ github.sha }} \
+            --image=$REGISTRY_REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:${{ github.sha }} \
             --region=$REGION \
             --platform=managed \
             --allow-unauthenticated
