@@ -27,7 +27,7 @@ Thumbs.db
 
 # Documentation
 README.md
-.md files
+*.md
 docs/
 
 # CI/CD

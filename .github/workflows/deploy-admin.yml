@@ -54,7 +54,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        run: docker build --build-arg VITE_API_BASE_URL="${{ env.VITE_API_BASE_URL }}" -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL="${{ env.VITE_API_BASE_URL }}" \
+            --build-arg VITE_CLOUDINARY_BASE_URL="${{ env.VITE_CLOUDINARY_BASE_URL }}" \
+            --build-arg VITE_CLOUDINARY_CLOUD_NAME="${{ env.VITE_CLOUDINARY_CLOUD_NAME }}" \
+            --build-arg VITE_CLOUDINARY_UPLOAD_PRESET="${{ env.VITE_CLOUDINARY_UPLOAD_PRESET }}" \
+            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
@@ -107,3 +113,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VITE_API_BASE_URL=${{ env.VITE_API_BASE_URL }}
+            VITE_CLOUDINARY_BASE_URL=${{ env.VITE_CLOUDINARY_BASE_URL }}
+            VITE_CLOUDINARY_CLOUD_NAME=${{ env.VITE_CLOUDINARY_CLOUD_NAME }}
+            VITE_CLOUDINARY_UPLOAD_PRESET=${{ env.VITE_CLOUDINARY_UPLOAD_PRESET }}
