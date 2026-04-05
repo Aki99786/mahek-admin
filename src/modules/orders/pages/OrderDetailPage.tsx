@@ -1,4 +1,4 @@
-import { ArrowLeft, Mail, Phone, MapPin, Package, Check } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Package, Check, LoaderCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -7,16 +7,71 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { orderDetailData } from "@/data/orderDetailData";
+import { useParams, useNavigate } from "react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getOrderById, updateOrderStatus } from "@/http/Services/all";
+import { showSuccess, showError } from "@/utility/utility";
 
 const OrderDetailPage = () => {
-  const order = orderDetailData;
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["order", id],
+    queryFn: () => getOrderById(id as string),
+    enabled: !!id,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (newStatus: string) => updateOrderStatus(id as string, newStatus),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", id] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] }); // Also invalidate list
+      showSuccess("Order status updated successfully");
+    },
+    onError: (error: any) => {
+      showError(error?.response?.data?.message || "Failed to update order status");
+    },
+  });
+
+  const order = data?.data?.order;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoaderCircle className="h-8 w-8 animate-spin text-purple-600" />
+      </div>
+    );
+  }
+
+  if (isError || !order) {
+    return (
+      <div className="flex items-center justify-center min-h-screen flex-col gap-4">
+        <p className="text-red-600 font-semibold text-lg">Order not found</p>
+        <button onClick={() => navigate("/orders")} className="text-purple-600 hover:underline">
+          Go back to Orders
+        </button>
+      </div>
+    );
+  }
+
+  // Define tracking steps dynamically based on current status
+  const trackingSteps = [
+    { id: 1, status: "CREATED", completed: true },
+    { id: 2, status: "PROCESSING", completed: ["PROCESSING", "SHIPPED", "DELIVERED"].includes(order.orderStatus) },
+    { id: 3, status: "SHIPPED", completed: ["SHIPPED", "DELIVERED"].includes(order.orderStatus) },
+    { id: 4, status: "DELIVERED", completed: order.orderStatus === "DELIVERED" },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Header */}
       <div className="mb-6">
-        <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors">
+        <button 
+          onClick={() => navigate("/orders")}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+        >
           <ArrowLeft className="w-4 h-4" />
           <span className="text-sm font-medium">Back to Orders</span>
         </button>
@@ -24,24 +79,28 @@ const OrderDetailPage = () => {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Order {order.orderNumber}
+              Order {order._id.substring(order._id.length - 8).toUpperCase()}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Placed on {order.placedDate}
+              Placed on {new Date(order.createdAt).toLocaleDateString()}
             </p>
           </div>
 
           {/* Status Dropdown */}
-          <Select defaultValue={order.status}>
+          <Select 
+            value={order.orderStatus} 
+            onValueChange={(val) => updateMutation.mutate(val)}
+            disabled={updateMutation.isPending}
+          >
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Delivered">Delivered</SelectItem>
-              <SelectItem value="In Transit">In Transit</SelectItem>
-              <SelectItem value="Processing">Processing</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="Cancelled">Cancelled</SelectItem>
+              <SelectItem value="DELIVERED">Delivered</SelectItem>
+              <SelectItem value="SHIPPED">Shipped</SelectItem>
+              <SelectItem value="PROCESSING">Processing</SelectItem>
+              <SelectItem value="CREATED">Created</SelectItem>
+              <SelectItem value="CANCELLED">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -58,7 +117,7 @@ const OrderDetailPage = () => {
               </h2>
 
               <div className="space-y-0">
-                {order.tracking.map((step, index) => (
+                {trackingSteps.map((step, index) => (
                   <div key={step.id} className="flex gap-4">
                     {/* Timeline Icon & Line */}
                     <div className="flex flex-col items-center">
@@ -75,7 +134,7 @@ const OrderDetailPage = () => {
                           }`}
                         />
                       </div>
-                      {index < order.tracking.length - 1 && (
+                      {index < trackingSteps.length - 1 && (
                         <div className="w-0.5 h-16 bg-gray-200 my-1" />
                       )}
                     </div>
@@ -89,9 +148,6 @@ const OrderDetailPage = () => {
                       >
                         {step.status}
                       </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {step.timestamp}
-                      </p>
                     </div>
                   </div>
                 ))}
@@ -107,16 +163,20 @@ const OrderDetailPage = () => {
               </h2>
 
               <div className="space-y-4">
-                {order.items.map((item) => (
-                  <Card key={item.id} className="border border-gray-200">
+                {order.items.map((item: any) => (
+                  <Card key={item._id} className="border border-gray-200">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Package className="w-6 h-6 text-gray-400" />
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {item.product?.allImages?.[0] ? (
+                            <img src={item.product.allImages[0]} alt={item.product.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <Package className="w-6 h-6 text-gray-400" />
+                          )}
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">
-                            {item.name}
+                          <h3 className="font-semibold text-gray-900 line-clamp-2">
+                            {item.product?.name || "Unknown Product"}
                           </h3>
                           <p className="text-sm text-gray-500 mt-1">
                             Quantity: {item.quantity}
@@ -124,10 +184,10 @@ const OrderDetailPage = () => {
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-gray-900">
-                            ${item.total.toFixed(2)}
+                            ₹{(item.price * item.quantity).toFixed(2)}
                           </p>
                           <p className="text-sm text-gray-500">
-                            ${item.pricePerUnit.toFixed(2)} each
+                            ₹{item.price.toFixed(2)} each
                           </p>
                         </div>
                       </div>
@@ -142,7 +202,7 @@ const OrderDetailPage = () => {
                   Total
                 </span>
                 <span className="text-2xl font-bold text-purple-600">
-                  ${order.total.toFixed(2)}
+                  ₹{order.totalAmount.toFixed(2)}
                 </span>
               </div>
             </CardContent>
@@ -163,7 +223,7 @@ const OrderDetailPage = () => {
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Name</p>
                   <p className="font-medium text-gray-900">
-                    {order.customer.name}
+                    {order.user?.name || "Unknown"}
                   </p>
                 </div>
 
@@ -171,11 +231,11 @@ const OrderDetailPage = () => {
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Email</p>
                   <a
-                    href={`mailto:${order.customer.email}`}
+                    href={`mailto:${order.user?.email}`}
                     className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm"
                   >
                     <Mail className="w-4 h-4" />
-                    {order.customer.email}
+                    {order.user?.email || "N/A"}
                   </a>
                 </div>
 
@@ -184,14 +244,14 @@ const OrderDetailPage = () => {
                   <p className="text-xs text-gray-500 mb-1">Phone</p>
                   <div className="flex items-center gap-2 text-gray-700 text-sm">
                     <Phone className="w-4 h-4 text-gray-400" />
-                    {order.customer.phone}
+                    {order.user?.phone || "N/A"}
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Delivery Address */}
+          {/* Delivery Address (Placeholder since it's not in schema yet) */}
           <Card className="bg-white">
             <CardContent className="p-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">
@@ -201,7 +261,7 @@ const OrderDetailPage = () => {
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-gray-700">
-                  {order.deliveryAddress}
+                  {order.shippingAddress?.street ? `${order.shippingAddress.street}, ${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.zipCode}` : "Address not provided"}
                 </p>
               </div>
             </CardContent>
@@ -212,23 +272,15 @@ const OrderDetailPage = () => {
             <CardContent className="p-6">
               <h3 className="text-lg font-bold mb-1">Invoice</h3>
               <p className="text-sm text-purple-100 mb-6">
-                Order #{order.orderNumber}
+                Order #{order._id.substring(order._id.length - 8).toUpperCase()}
               </p>
 
               <div className="space-y-3">
-                {/* Subtotal */}
+                {/* Status */}
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-purple-100">Subtotal</span>
+                  <span className="text-purple-100">Payment Status</span>
                   <span className="font-semibold">
-                    ${order.subtotal.toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Shipping */}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-purple-100">Shipping</span>
-                  <span className="font-semibold">
-                    {order.shipping === 0 ? "Free" : `$${order.shipping.toFixed(2)}`}
+                    {order.paymentStatus}
                   </span>
                 </div>
 
@@ -236,7 +288,7 @@ const OrderDetailPage = () => {
                 <div className="flex items-center justify-between pt-3 border-t border-purple-400">
                   <span className="font-semibold">Total</span>
                   <span className="text-xl font-bold">
-                    ${order.total.toFixed(2)}
+                    ₹{order.totalAmount.toFixed(2)}
                   </span>
                 </div>
               </div>
