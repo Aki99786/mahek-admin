@@ -3,24 +3,23 @@ name: Deploy Admin
 on:
   push:
     branches:
-      - develop
       - main
-  workflow_dispatch:
+      - develop
 
 env:
-  PROJECT_ID: mahek-deploy
-  REGION: asia-south1
-  REGISTRY: asia-south1-docker.pkg.dev
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
   REPOSITORY: mahek-admin
   IMAGE: admin
+  # Cloudinary (public values — safe to hardcode)
+  VITE_CLOUDINARY_BASE_URL: https://api.cloudinary.com/v1_1/
+  VITE_CLOUDINARY_CLOUD_NAME: dhgylinef
+  VITE_CLOUDINARY_UPLOAD_PRESET: Mahek_preset
 
 jobs:
   deploy:
-    # Only deploy on push events (not PRs)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
-    # Required for Workload Identity Federation
     permissions:
       contents: read
       id-token: write
@@ -29,67 +28,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── Set branch-specific variables ─────────────────────────────────────
-      - name: Set environment variables
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_PROD }}" >> "$GITHUB_ENV"
-            echo "SERVICE_NAME=admin-prod"                                  >> "$GITHUB_ENV"
-            echo "IMAGE_TAG=latest"                                         >> "$GITHUB_ENV"
-          else
-            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_STAGING }}" >> "$GITHUB_ENV"
-            echo "SERVICE_NAME=admin-staging"                                  >> "$GITHUB_ENV"
-            echo "IMAGE_TAG=staging"                                           >> "$GITHUB_ENV"
-          fi
-
-      # ── Authenticate to GCP via Workload Identity Federation ──────────────
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
-      # ── Configure Docker to push to Artifact Registry ─────────────────────
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker $REGION-docker.pkg.dev
 
-      # ── Build & push image ─────────────────────────────────────────────────
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ env.IMAGE_TAG }}
-          build-args: |
-            VITE_API_BASE_URL=${{ env.VITE_API_BASE_URL }}
-            VITE_CLOUDINARY_BASE_URL=${{ secrets.VITE_CLOUDINARY_BASE_URL }}
-            VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
-            VITE_CLOUDINARY_UPLOAD_PRESET=${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # ── Deploy to Cloud Run ────────────────────────────────────────────────
-      - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE_NAME }}
-          region: ${{ env.REGION }}
-          image: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}
-          flags: >-
-            --allow-unauthenticated
-            --min-instances=0
-            --max-instances=3
-            --memory=512Mi
-            --cpu=1
-            --port=8080
-
-      - name: Show deployed URL
+      - name: Select service and API URL based on branch
         run: |
-          echo "✅ Deployed ${{ env.SERVICE_NAME }} successfully!"
-          echo "🌐 URL: $(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --project=${{ env.PROJECT_ID }} --format='value(status.url)')"
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "SERVICE_NAME=admin-prod"                                          >> $GITHUB_ENV
+            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_PROD }}"         >> $GITHUB_ENV
+          else
+            echo "SERVICE_NAME=admin-staging"                                       >> $GITHUB_ENV
+            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_STAGING }}"      >> $GITHUB_ENV
+          fi
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
+            --build-arg VITE_CLOUDINARY_BASE_URL="$VITE_CLOUDINARY_BASE_URL" \
+            --build-arg VITE_CLOUDINARY_CLOUD_NAME="$VITE_CLOUDINARY_CLOUD_NAME" \
+            --build-arg VITE_CLOUDINARY_UPLOAD_PRESET="$VITE_CLOUDINARY_UPLOAD_PRESET" \
+            -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ github.sha }} .
+
+      - name: Push Docker image
+        run: |
+          docker push $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE_NAME \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=3 \
+            --memory=512Mi \
+            --cpu=1 \
+            --port=8080
