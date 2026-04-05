@@ -10,9 +10,9 @@ on:
 env:
   IMAGE_NAME: mahek-admin
   PROJECT_ID: mahek-deploy
-  REGION: asia-south1
-  REGISTRY_REGION: asia-south1
-  REPOSITORY: mahek-repo
+  REGION: asia-east1
+  REGISTRY_REGION: asia-east1
+  REPOSITORY: cloud-run-source-deploy
 
   VITE_CLOUDINARY_BASE_URL: ${{ secrets.VITE_CLOUDINARY_BASE_URL }}
   VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
