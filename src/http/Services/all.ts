@@ -66,7 +66,16 @@ export const deleteProduct = async (id: string) => api.delete(`products/delete/$
  *
  * @param {string} [queryString] - Optional query string beginning with `?`.
  */
-export const getUsersList = async (queryString = '') => api.get(`admin/auth/users/${queryString}`);
+export const getUsersList = async (queryString = '') => api.get(`admin/users/${queryString}`);
+
+/**
+ * Get an user by ID.
+ *
+ * @param {string} id - Unique ID of the user.
+ *
+ * @returns {Promise<any>} - Returns the API response promise.
+ */
+export const getUserById = async (id: string) => api.get(`admin/users/${id}`);
 
 
 // Get DashBoard Data Start
@@ -75,5 +84,33 @@ export const getUsersList = async (queryString = '') => api.get(`admin/auth/user
  *
  * @param {string} [queryString] - Optional query string beginning with `?`.
  */
-export const getDashBoardData = async (queryString = '') => api.get(`admin/auth/dashboard/${queryString}`);
+export const getDashBoardData = async (queryString = '') => api.get(`admin/dashboard?${queryString}`);
+
+// Orders APIs Start
+
+/**
+ * Fetches a list of Orders using the provided query string.
+ *
+ * @param {string} [queryString] - Optional query string beginning with `?`.
+ */
+export const getOrdersList = async (queryString = '') => api.get(`admin/orders/${queryString}`);
+
+/**
+ * Get an order by ID.
+ *
+ * @param {string} id - Unique ID of the order.
+ *
+ * @returns {Promise<any>} - Returns the API response promise.
+ */
+export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
+
+/**
+ * Update order status.
+ *
+ * @param {string} id - Unique ID of the order.
+ * @param {string} status - New status.
+ *
+ * @returns {Promise<any>} - Returns the API response promise.
+ */
+export const updateOrderStatus = async (id: string, status: string) => api.patch(`orders/${id}/status`, { orderStatus: status });
 
