@@ -26,7 +26,7 @@ export const createProduct = async (payload: any) => api.post(`products/add-prod
  *
  * @returns {Promise<any>} - Returns the API response promise.
  */
-export const deleteProductBasedOnId = async (id: string) => api.delete(`candidates/admin/products/${id}/delete/`);
+export const deleteProduct = async (id: string) => api.delete(`products/delete/${id}`);
 
 
 /**
@@ -46,17 +46,7 @@ export const getProductById = async (id: string) => api.get(`products/${id}`);
  *
  * @returns {Promise<any>} - Returns the API response promise.
  */
-export const updateProduct = async (id: string, payload: any) => api.put(`products/${id}`, payload);
-
-
-/**
- * Sends a DELETE request to the server to remove a product by its ID.
- *
- * @param id - The unique identifier of the product to be deleted.
- * @returns A promise that resolves with the API response after successful deletion.
- */
-export const deleteProduct = async (id: string) => api.delete(`products/delete/${id}`);
-
+export const updateProduct = async (id: string, payload: any) => api.put(`products/update-product/${id}`, payload);
 
 
 // Users APIs Start
