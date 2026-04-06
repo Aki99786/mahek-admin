@@ -8,7 +8,7 @@ on:
 
 env:
   PROJECT_ID: mahek-deploy
-  REGION: asia-south1
+  REGION: asia-southeast1
   REPOSITORY: mahek-admin
   IMAGE: admin
   # Cloudinary (public values — safe to hardcode)
