@@ -65,6 +65,11 @@ const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"] as const;
 const ALLOWED_IMAGE_ACCEPT = ".jpg,.jpeg,.png";
 
+/** Stock fields use `type="text"` to avoid scroll-wheel changes; allow digits only. */
+function sanitizeStockInput(raw: string): string {
+  return raw.replace(/\D/g, "");
+}
+
 // Validation function
 function validateImageFile(
   file: File,
@@ -247,7 +252,8 @@ const VariantCard = memo(
       onUpdate(variant.id, { sizes: newSizes });
     };
 
-    const handleStockChange = (size: string, stock: string) => {
+    const handleStockChange = (size: string, raw: string) => {
+      const stock = sanitizeStockInput(raw);
       const newSizes = {
         ...variant.sizes,
         [size]: {
@@ -441,8 +447,9 @@ const VariantCard = memo(
               Stock <span className="text-red-500">*</span>
             </FieldLabel>
             <Input
-              type="number"
-              min="0"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
               placeholder="0"
               value={variant.sizes["ONE_SIZE"]?.stock || ""}
               onChange={(e) => handleStockChange("ONE_SIZE", e.target.value)}
@@ -462,8 +469,9 @@ const VariantCard = memo(
                       {size}
                     </label>
                     <Input
-                      type="number"
-                      min="0"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
                       placeholder="0"
                       value={data.stock}
                       onChange={(e) => handleStockChange(size, e.target.value)}
