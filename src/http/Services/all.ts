@@ -26,7 +26,7 @@ export const createProduct = async (payload: any) => api.post(`products/add-prod
  *
  * @returns {Promise<any>} - Returns the API response promise.
  */
-export const deleteProductBasedOnId = async (id: string) => api.delete(`candidates/admin/products/${id}/delete/`);
+export const deleteProduct = async (id: string) => api.delete(`products/delete/${id}`);
 
 
 /**
