@@ -77,3 +77,21 @@ export const getUsersList = async (queryString = '') => api.get(`admin/auth/user
  */
 export const getDashBoardData = async (queryString = '') => api.get(`admin/auth/dashboard/${queryString}`);
 
+
+// Fetches the list of orders from the admin API.
+// Accepts an optional query string for filters, pagination, or sorting.
+export const getOrderList = async (queryString = '') => api.get(`admin/orders/${queryString}`);
+
+
+// Fetches a single order by its unique ID from the admin API.
+// Used to get detailed information of a specific order.
+export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
+
+
+
+
+
+
+
+
+

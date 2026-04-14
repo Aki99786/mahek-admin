@@ -1,104 +1,93 @@
-import { ArrowLeft, Mail, Phone, MapPin, Package, Check } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Package } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useParams } from "react-router";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { orderDetailData } from "@/data/orderDetailData";
+import { getOrderById } from "@/http/Services/all";
+
+interface OrderItem {
+  _id: string;
+  product?: {
+    name?: string;
+  };
+  quantity?: number;
+  price?: number;
+}
+
+interface OrderDetailApi {
+  _id: string;
+  user?: {
+    email?: string;
+    name?: string;
+  };
+  shippingAddress?: {
+    fullName?: string;
+    phone?: string;
+    addressLine1?: string;
+  };
+  items?: OrderItem[];
+  totalAmount?: number;
+}
 
 const OrderDetailPage = () => {
-  const order = orderDetailData;
+  const { id } = useParams<{ id: string }>();
+
+  const { data: order, isLoading, isError } = useQuery<OrderDetailApi>({
+    queryKey: ["order-detail", id],
+    queryFn: async () => {
+      const res = await getOrderById(id!);
+      return (
+        (res as { data?: { order?: OrderDetailApi } }).data?.order ??
+        (res as { data?: OrderDetailApi }).data ??
+        (res as unknown as OrderDetailApi)
+      );
+    },
+    enabled: Boolean(id),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const items = order?.items ?? [];
+  const totalAmount = Number(order?.totalAmount ?? 0);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <p className="text-sm text-gray-600">Loading order details...</p>
+      </div>
+    );
+  }
+
+  if (isError || !order) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <p className="text-sm text-red-600">Failed to load order details.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Header */}
       <div className="mb-6">
-        <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors">
+        <Link
+          to="/orders"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors w-fit"
+        >
           <ArrowLeft className="w-4 h-4" />
           <span className="text-sm font-medium">Back to Orders</span>
-        </button>
+        </Link>
 
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Order {order.orderNumber}
+              Order {order._id}
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Placed on {order.placedDate}
-            </p>
           </div>
-
-          {/* Status Dropdown */}
-          <Select defaultValue={order.status}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Delivered">Delivered</SelectItem>
-              <SelectItem value="In Transit">In Transit</SelectItem>
-              <SelectItem value="Processing">Processing</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="Cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Order Tracking & Items */}
+        {/* Left Column - Order Items */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Order Tracking */}
-          <Card className="bg-white">
-            <CardContent className="p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-6">
-                Order Tracking
-              </h2>
-
-              <div className="space-y-0">
-                {order.tracking.map((step, index) => (
-                  <div key={step.id} className="flex gap-4">
-                    {/* Timeline Icon & Line */}
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          step.completed
-                            ? "bg-green-500"
-                            : "bg-gray-200"
-                        }`}
-                      >
-                        <Check
-                          className={`w-5 h-5 ${
-                            step.completed ? "text-white" : "text-gray-400"
-                          }`}
-                        />
-                      </div>
-                      {index < order.tracking.length - 1 && (
-                        <div className="w-0.5 h-16 bg-gray-200 my-1" />
-                      )}
-                    </div>
-
-                    {/* Step Content */}
-                    <div className="flex-1 pb-8">
-                      <h3
-                        className={`font-semibold ${
-                          step.completed ? "text-gray-900" : "text-gray-500"
-                        }`}
-                      >
-                        {step.status}
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {step.timestamp}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Order Items */}
           <Card className="bg-white">
             <CardContent className="p-6">
@@ -107,8 +96,12 @@ const OrderDetailPage = () => {
               </h2>
 
               <div className="space-y-4">
-                {order.items.map((item) => (
-                  <Card key={item.id} className="border border-gray-200">
+                {items.map((item) => {
+                  const quantity = Number(item.quantity ?? 0);
+                  const price = Number(item.price ?? 0);
+                  const itemTotal = quantity * price;
+                  return (
+                  <Card key={item._id} className="border border-gray-200">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -116,24 +109,25 @@ const OrderDetailPage = () => {
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">
-                            {item.name}
+                            {item.product?.name || "Unnamed Product"}
                           </h3>
                           <p className="text-sm text-gray-500 mt-1">
-                            Quantity: {item.quantity}
+                            Quantity: {quantity}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-gray-900">
-                            ${item.total.toFixed(2)}
+                            ₹{itemTotal.toFixed(2)}
                           </p>
                           <p className="text-sm text-gray-500">
-                            ${item.pricePerUnit.toFixed(2)} each
+                            ₹{price.toFixed(2)} each
                           </p>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Total */}
@@ -142,7 +136,7 @@ const OrderDetailPage = () => {
                   Total
                 </span>
                 <span className="text-2xl font-bold text-purple-600">
-                  ${order.total.toFixed(2)}
+                  ₹{totalAmount.toFixed(2)}
                 </span>
               </div>
             </CardContent>
@@ -163,7 +157,7 @@ const OrderDetailPage = () => {
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Name</p>
                   <p className="font-medium text-gray-900">
-                    {order.customer.name}
+                    {order.shippingAddress?.fullName || "N/A"}
                   </p>
                 </div>
 
@@ -171,11 +165,11 @@ const OrderDetailPage = () => {
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Email</p>
                   <a
-                    href={`mailto:${order.customer.email}`}
+                    href={`mailto:${order.user?.email || ""}`}
                     className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm"
                   >
                     <Mail className="w-4 h-4" />
-                    {order.customer.email}
+                    {order.user?.email || "N/A"}
                   </a>
                 </div>
 
@@ -184,7 +178,7 @@ const OrderDetailPage = () => {
                   <p className="text-xs text-gray-500 mb-1">Phone</p>
                   <div className="flex items-center gap-2 text-gray-700 text-sm">
                     <Phone className="w-4 h-4 text-gray-400" />
-                    {order.customer.phone}
+                    {order.shippingAddress?.phone || "N/A"}
                   </div>
                 </div>
               </div>
@@ -201,7 +195,7 @@ const OrderDetailPage = () => {
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-gray-700">
-                  {order.deliveryAddress}
+                  {order.shippingAddress?.addressLine1 || "N/A"}
                 </p>
               </div>
             </CardContent>
@@ -212,7 +206,7 @@ const OrderDetailPage = () => {
             <CardContent className="p-6">
               <h3 className="text-lg font-bold mb-1">Invoice</h3>
               <p className="text-sm text-purple-100 mb-6">
-                Order #{order.orderNumber}
+                Order #{order._id}
               </p>
 
               <div className="space-y-3">
@@ -220,23 +214,21 @@ const OrderDetailPage = () => {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-purple-100">Subtotal</span>
                   <span className="font-semibold">
-                    ${order.subtotal.toFixed(2)}
+                    ₹{totalAmount.toFixed(2)}
                   </span>
                 </div>
 
                 {/* Shipping */}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-purple-100">Shipping</span>
-                  <span className="font-semibold">
-                    {order.shipping === 0 ? "Free" : `$${order.shipping.toFixed(2)}`}
-                  </span>
+                  <span className="font-semibold">-</span>
                 </div>
 
                 {/* Total */}
                 <div className="flex items-center justify-between pt-3 border-t border-purple-400">
                   <span className="font-semibold">Total</span>
                   <span className="text-xl font-bold">
-                    ${order.total.toFixed(2)}
+                    ₹{totalAmount.toFixed(2)}
                   </span>
                 </div>
               </div>
