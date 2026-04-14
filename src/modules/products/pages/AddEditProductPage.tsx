@@ -207,12 +207,30 @@ interface ProductApiResponse {
     color: string;
     sellingPrice: number;
     mrp: number;
-    sizes: Array<{
-      size: string;
-      stock: number;
-    }>;
+    sizes:
+      | Array<{
+          size: string;
+          stock: number;
+          selected?: boolean;
+        }>
+      | Record<string, { stock?: number | string; selected?: boolean } | number | string>;
     images: string[];
     sizeDetails?: string;
+    stitchType?: string;
+    fabric?: string;
+    neckType?: string;
+    sleeveType?: string;
+    setIncludes?: string[];
+    workType?: string[];
+    occasion?: string[];
+    measurements?: {
+      waist?: string;
+      bust?: string;
+      lehengaLength?: string;
+      dupattaLength?: string;
+      flare?: string;
+    };
+    _id?: string;
   }>;
   averageRating?: number;
   totalReviews?: number;
@@ -221,6 +239,95 @@ interface ProductApiResponse {
   updatedAt?: string;
   __v?: number;
 }
+
+const toStringValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  return String(value);
+};
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => toStringValue(item).trim())
+    .filter(Boolean);
+};
+
+const normalizeMeasurements = (
+  value: unknown,
+): ProductVariant["measurements"] => {
+  if (!value || typeof value !== "object") return {};
+  const source = value as Record<string, unknown>;
+  return {
+    waist: toStringValue(source.waist),
+    bust: toStringValue(source.bust),
+    lehengaLength: toStringValue(source.lehengaLength),
+    dupattaLength: toStringValue(source.dupattaLength),
+    flare: toStringValue(source.flare),
+  };
+};
+
+const normalizeSizes = (
+  rawSizes: ProductApiResponse["variants"][number]["sizes"] | unknown,
+  category: string,
+): Record<string, { selected: boolean; stock: string }> => {
+  const isSareeFlow = isSareeCategory(category);
+  const fallback = isSareeFlow
+    ? { ONE_SIZE: { selected: true, stock: "" } }
+    : {};
+
+  if (Array.isArray(rawSizes)) {
+    const parsed = rawSizes.reduce(
+      (acc, sizeItem) => {
+        const item = sizeItem as {
+          size?: unknown;
+          stock?: unknown;
+          selected?: unknown;
+        };
+        const sizeKey = toStringValue(item.size).trim();
+        if (!sizeKey) return acc;
+        acc[sizeKey] = {
+          selected:
+            typeof item.selected === "boolean" ? item.selected : true,
+          stock: toStringValue(item.stock),
+        };
+        return acc;
+      },
+      {} as Record<string, { selected: boolean; stock: string }>,
+    );
+
+    return Object.keys(parsed).length > 0 ? parsed : fallback;
+  }
+
+  if (rawSizes && typeof rawSizes === "object") {
+    const parsed = Object.entries(rawSizes as Record<string, unknown>).reduce(
+      (acc, [sizeKey, sizeValue]) => {
+        if (!sizeKey) return acc;
+        if (sizeValue && typeof sizeValue === "object") {
+          const sizeObj = sizeValue as Record<string, unknown>;
+          acc[sizeKey] = {
+            selected:
+              typeof sizeObj.selected === "boolean"
+                ? sizeObj.selected
+                : true,
+            stock: toStringValue(sizeObj.stock),
+          };
+          return acc;
+        }
+
+        acc[sizeKey] = {
+          selected: true,
+          stock: toStringValue(sizeValue),
+        };
+        return acc;
+      },
+      {} as Record<string, { selected: boolean; stock: string }>,
+    );
+
+    return Object.keys(parsed).length > 0 ? parsed : fallback;
+  }
+
+  return fallback;
+};
 
 // Image upload status
 interface ImageUploadStatus {
@@ -1428,49 +1535,43 @@ const AddEditProductPage = () => {
   // Populate form in edit mode
   useEffect(() => {
     if (!product || hasPopulatedForm || !isEditMode) return;
-    
-    console.log("🔵 Starting form population with product data:", product);
-    
+
     // Transform API response variants to internal format
-    const transformedVariants: ProductVariant[] = product.variants.map((apiVariant, idx) => {
-      console.log(`🔵 Transforming variant ${idx + 1}:`, apiVariant);
-      
-      // Transform sizes array to sizes object
-      const sizesObject = apiVariant.sizes.reduce((acc, sizeItem) => {
-        console.log(`  ✓ Adding size: ${sizeItem.size} with stock: ${sizeItem.stock}`);
-        return {
-          ...acc,
-          [sizeItem.size]: {
-            selected: true,
-            stock: sizeItem.stock.toString(),
-          },
-        };
-      }, {} as Record<string, { selected: boolean; stock: string }>);
-      
-      console.log(`  🔵 Sizes object for variant ${idx + 1}:`, sizesObject);
-      
+    const transformedVariants: ProductVariant[] = (product.variants ?? []).map(
+      (apiVariant, idx) => {
+      const rawVariant = apiVariant as Record<string, unknown>;
+      const sizesObject = normalizeSizes(apiVariant.sizes, product.category ?? "");
+
       return {
-        id: apiVariant.variantId,
-        color: apiVariant.color,
-        sellingPrice: apiVariant.sellingPrice.toString(),
-        mrp: apiVariant.mrp.toString(),
+        id:
+          apiVariant.variantId ||
+          apiVariant._id ||
+          `variant-${idx}-${crypto.randomUUID()}`,
+        color: toStringValue(apiVariant.color),
+        sellingPrice: toStringValue(apiVariant.sellingPrice),
+        mrp: toStringValue(apiVariant.mrp),
         sizes: sizesObject,
-        images: apiVariant.images,
-        sizeDetails: apiVariant.sizeDetails,
-        stitchType: product.pattern ?? "",
-        fabric: product.fabric ?? "",
-        neckType: product.neckType ?? "",
-        sleeveType: product.sleeveType ?? "",
-        setIncludes: [],
-        workType: [],
-        occasion: [],
-        measurements: {},
+        images: Array.isArray(apiVariant.images) ? apiVariant.images : [],
+        sizeDetails: toStringValue(apiVariant.sizeDetails),
+        stitchType:
+          toStringValue(rawVariant.stitchType) ||
+          toStringValue(product.pattern),
+        fabric:
+          toStringValue(rawVariant.fabric) ||
+          toStringValue(product.fabric),
+        neckType:
+          toStringValue(rawVariant.neckType) ||
+          toStringValue(product.neckType),
+        sleeveType:
+          toStringValue(rawVariant.sleeveType) ||
+          toStringValue(product.sleeveType),
+        setIncludes: normalizeStringArray(rawVariant.setIncludes),
+        workType: normalizeStringArray(rawVariant.workType),
+        occasion: normalizeStringArray(rawVariant.occasion),
+        measurements: normalizeMeasurements(rawVariant.measurements),
       };
     });
-    
-    console.log("🔵 All transformed variants:", transformedVariants);
-    console.log("🔵 Transformed variants count:", transformedVariants.length);
-    
+
     const formValues = {
       productName: product.name ?? "",
       brand: product.brand ?? "",
@@ -1482,14 +1583,8 @@ const AddEditProductPage = () => {
       description: product.description ?? "",
       variants: [],
     };
-    
-    console.log("🔵 Form values to set:", formValues);
-    
-    // Set variants FIRST before setting category to prevent category change effect from resetting them
+
     setVariants(transformedVariants);
-    console.log("✅ Variants set in state");
-    
-    // Then set form values
     form.setFieldValue("productName", formValues.productName);
     form.setFieldValue("brand", formValues.brand);
     form.setFieldValue("pattern", formValues.pattern);
@@ -1498,15 +1593,8 @@ const AddEditProductPage = () => {
     form.setFieldValue("neckType", formValues.neckType);
     
     setDescription(product.description ?? "");
-    
-    // Set category LAST to prevent triggering category change effect prematurely
     form.setFieldValue("category", formValues.category);
-    
-    // Mark as populated AFTER setting category
-    setTimeout(() => {
-      setHasPopulatedForm(true);
-      console.log("✅ Form population complete - hasPopulatedForm set to true");
-    }, 100);
+    setHasPopulatedForm(true);
   }, [product, hasPopulatedForm, isEditMode, form]);
 
   const resetFormForCategory = (nextCategory: string) => {

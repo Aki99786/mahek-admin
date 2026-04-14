@@ -124,10 +124,6 @@ const ImageSlider = memo(({ images }: { images: string[] }) => {
           {selectedIndex + 1}/{images.length}
         </div>
 
-        {/* Wishlist Button */}
-        <button className="absolute top-3 right-3 bg-white/90 hover:bg-white rounded-full p-2 shadow-lg">
-          <Heart className="w-5 h-5 text-gray-700" />
-        </button>
       </div>
 
       {/* Thumbnail Navigation */}
