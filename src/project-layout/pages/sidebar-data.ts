@@ -44,13 +44,7 @@ export const sidebarData: SidebarNavItem[] = [
     url: "/orders",
     icon: ShoppingCart,
     isActive: true,
-  },
-  {
-    title: "Cart",
-    url: "/cart",
-    icon: ShoppingBag,
-    isActive: true,
-  },
+  }
 
 ];
 

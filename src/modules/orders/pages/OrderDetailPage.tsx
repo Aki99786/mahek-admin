@@ -1,8 +1,15 @@
-import { ArrowLeft, Mail, Phone, MapPin, Package } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Package, Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { getOrderById } from "@/http/Services/all";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface OrderItem {
   _id: string;
@@ -26,7 +33,16 @@ interface OrderDetailApi {
   };
   items?: OrderItem[];
   totalAmount?: number;
+  orderStatus?: string;
 }
+
+const STATIC_TRACKING_STEPS = [
+  { id: "1", status: "Order Placed", timestamp: "2026-01-28 10:30 AM" },
+  { id: "2", status: "Processing", timestamp: "2026-01-28 02:15 PM" },
+  { id: "3", status: "Shipped", timestamp: "2026-01-29 09:00 AM" },
+  { id: "4", status: "In Transit", timestamp: "2026-01-30 08:30 AM" },
+  { id: "5", status: "Delivered", timestamp: "2026-02-01 03:45 PM" },
+];
 
 const OrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -82,12 +98,46 @@ const OrderDetailPage = () => {
               Order {order._id}
             </h1>
           </div>
+          
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Order Items */}
+        {/* Left Column - Order Tracking & Items */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Static Order Tracking UI (display only) */}
+          <Card className="bg-white">
+            <CardContent className="p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-6">
+                Order Tracking
+              </h2>
+
+              <div className="space-y-0">
+                {STATIC_TRACKING_STEPS.map((step, index) => (
+                  <div key={step.id} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-green-500">
+                        <Check className="w-5 h-5 text-white" />
+                      </div>
+                      {index < STATIC_TRACKING_STEPS.length - 1 && (
+                        <div className="w-0.5 h-16 bg-gray-200 my-1" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 pb-8">
+                      <h3 className="font-semibold text-gray-900">
+                        {step.status}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {step.timestamp}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Order Items */}
           <Card className="bg-white">
             <CardContent className="p-6">
