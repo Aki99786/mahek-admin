@@ -49,6 +49,16 @@ export const getProductById = async (id: string) => api.get(`products/${id}`);
 export const updateProduct = async (id: string, payload: any) => api.put(`products/update-product/${id}`, payload);
 
 
+/**
+ * Sends a DELETE request to the server to remove a product by its ID.
+ *
+ * @param id - The unique identifier of the product to be deleted.
+ * @returns A promise that resolves with the API response after successful deletion.
+ */
+export const deleteProduct = async (id: string) => api.delete(`products/delete/${id}`);
+
+
+
 // Users APIs Start
 
 /**
@@ -85,14 +95,6 @@ export const getDashBoardData = async (queryString = '') => api.get(`admin/dashb
  */
 export const getOrdersList = async (queryString = '') => api.get(`admin/orders/${queryString}`);
 
-/**
- * Get an order by ID.
- *
- * @param {string} id - Unique ID of the order.
- *
- * @returns {Promise<any>} - Returns the API response promise.
- */
-export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
 
 /**
  * Update order status.
@@ -103,4 +105,22 @@ export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
  * @returns {Promise<any>} - Returns the API response promise.
  */
 export const updateOrderStatus = async (id: string, status: string) => api.patch(`orders/${id}/status`, { orderStatus: status });
+
+
+// Fetches the list of orders from the admin API.
+// Accepts an optional query string for filters, pagination, or sorting.
+export const getOrderList = async (queryString = '') => api.get(`admin/orders/${queryString}`);
+
+
+// Fetches a single order by its unique ID from the admin API.
+// Used to get detailed information of a specific order.
+export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
+
+
+
+
+
+
+
+
 

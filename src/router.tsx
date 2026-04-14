@@ -57,6 +57,10 @@ const OrderDetailPage = lazy(
   () => import("./modules/orders/pages/OrderDetailPage"),
 );
 
+const CheckoutAddressPage = lazy(
+  () => import("./features/checkout/address/CheckoutAddressPage"),
+);
+
 // ===== Reusable Suspense Wrapper =====
 const withSuspense = (Component: any) => (
   <Suspense fallback={<LoadingSpinner />}>
@@ -129,6 +133,9 @@ export const router = createBrowserRouter([
           { path: "detail/:id", element: withSuspense(OrderDetailPage) },
         ],
       },
+
+      // Cart & checkout (customer-style flow in admin shell)
+      { path: "checkout/address", element: withSuspense(CheckoutAddressPage) },
     ],
   },
 ]);
