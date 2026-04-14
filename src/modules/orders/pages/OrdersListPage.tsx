@@ -69,7 +69,7 @@ const OrdersListPage = () => {
     setPage(1);
   }, [debouncedSearchValue, filterStatus]);
 
-  const queryString = React.useMemo(() => {
+  const queryString: string = React.useMemo(() => {
     const params = new URLSearchParams();
     if (debouncedSearchValue) {
       params.append("search", debouncedSearchValue);
@@ -96,7 +96,8 @@ const OrdersListPage = () => {
     totalPages: 1,
   };
 
-  // Calculate statistics
+  // Calculate statistics (would ideally come from a dashboard/stats API, but calculating based on pagination.total to match original UI as much as possible, though original showed stats for ALL orders)
+  // For precise stats across ALL data, a separate stats call is recommended. These are best-effort placeholder stats based on the UI.
   const stats = React.useMemo(() => {
     const statuses = orders.map((o) => (o.orderStatus || "").toUpperCase());
     return {
@@ -202,7 +203,7 @@ const OrdersListPage = () => {
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
-            placeholder="Search by order ID, customer name, or email..."
+            placeholder="Search by ID, customer name, or email..."
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             className="pl-10 h-11 border-gray-300 bg-white"

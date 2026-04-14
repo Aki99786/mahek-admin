@@ -3,18 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { getOrderById } from "@/http/Services/all";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface OrderItem {
   _id: string;
   product?: {
     name?: string;
+    allImages?: string[];
   };
   quantity?: number;
   price?: number;
@@ -128,9 +122,6 @@ const OrderDetailPage = () => {
                       <h3 className="font-semibold text-gray-900">
                         {step.status}
                       </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {step.timestamp}
-                      </p>
                     </div>
                   </div>
                 ))}
@@ -154,8 +145,12 @@ const OrderDetailPage = () => {
                   <Card key={item._id} className="border border-gray-200">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Package className="w-6 h-6 text-gray-400" />
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {item.product?.allImages?.[0] ? (
+                            <img src={item.product.allImages[0]} alt={item.product.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <Package className="w-6 h-6 text-gray-400" />
+                          )}
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">
@@ -235,7 +230,7 @@ const OrderDetailPage = () => {
             </CardContent>
           </Card>
 
-          {/* Delivery Address */}
+          {/* Delivery Address (Placeholder since it's not in schema yet) */}
           <Card className="bg-white">
             <CardContent className="p-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">
@@ -260,9 +255,9 @@ const OrderDetailPage = () => {
               </p>
 
               <div className="space-y-3">
-                {/* Subtotal */}
+                {/* Status */}
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-purple-100">Subtotal</span>
+                  <span className="text-purple-100">Payment Status</span>
                   <span className="font-semibold">
                     ₹{totalAmount.toFixed(2)}
                   </span>

@@ -1,0 +1,95 @@
+name: Deploy Admin
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: mahek-deploy
+  REGION: asia-south1
+  REGISTRY: asia-south1-docker.pkg.dev
+  REPOSITORY: mahek-admin
+  IMAGE: admin
+
+jobs:
+  deploy:
+    # Only deploy on push events (not PRs)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    # Required for Workload Identity Federation
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Set branch-specific variables ─────────────────────────────────────
+      - name: Set environment variables
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_PROD }}" >> "$GITHUB_ENV"
+            echo "SERVICE_NAME=admin-prod"                                  >> "$GITHUB_ENV"
+            echo "IMAGE_TAG=latest"                                         >> "$GITHUB_ENV"
+          else
+            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL_STAGING }}" >> "$GITHUB_ENV"
+            echo "SERVICE_NAME=admin-staging"                                  >> "$GITHUB_ENV"
+            echo "IMAGE_TAG=staging"                                           >> "$GITHUB_ENV"
+          fi
+
+      # ── Authenticate to GCP via Workload Identity Federation ──────────────
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      # ── Configure Docker to push to Artifact Registry ─────────────────────
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      # ── Build & push image ─────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ env.IMAGE_TAG }}
+          build-args: |
+            VITE_API_BASE_URL=${{ env.VITE_API_BASE_URL }}
+            VITE_CLOUDINARY_BASE_URL=${{ secrets.VITE_CLOUDINARY_BASE_URL }}
+            VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
+            VITE_CLOUDINARY_UPLOAD_PRESET=${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Deploy to Cloud Run ────────────────────────────────────────────────
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}
+          flags: >-
+            --allow-unauthenticated
+            --min-instances=0
+            --max-instances=3
+            --memory=512Mi
+            --cpu=1
+            --port=8080
+
+      - name: Show deployed URL
+        run: |
+          echo "✅ Deployed ${{ env.SERVICE_NAME }} successfully!"
+          echo "🌐 URL: $(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --project=${{ env.PROJECT_ID }} --format='value(status.url)')"
