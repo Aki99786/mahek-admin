@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Field,
-  FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
@@ -49,16 +48,45 @@ import "ckeditor5/ckeditor5.css";
 // Available sizes for selection
 const AVAILABLE_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
 
-// Category to Sub-Category mapping
-const CATEGORY_SUBCATEGORY_MAP: Record<string, string[]> = {
-  Lehenga: ["Bridal Lehenga", "Sider Lehenga"],
-  "Rajputi Poshak": [
-    "Bridal one poshak",
-    "Bridal one High poshak",
-    "Bridal poshak",
-  ],
-  Saree: ["Ethik saree", "Leven saree", "Govan cortan"],
+const LEHENGA_FAMILY_CATEGORIES = [
+  "Lehenga",
+  "Bridal Lehenga",
+  "Rajputi Poshak",
+] as const;
+
+const SAREE_CATEGORIES = ["Saree", "Banarasi Sarees"] as const;
+
+const STITCH_TYPE_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
+  Lehenga: ["Stitched", "Semi-Stitched", "Unstitched", "Ready to Wear"],
+  "Bridal Lehenga": ["Stitched", "Semi-Stitched", "Unstitched", "Ready to Wear"],
+  "Rajputi Poshak": ["Stitched", "Semi-Stitched", "Unstitched", "Ready to Wear"],
 };
+const FABRIC_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
+  Lehenga: ["Silk", "Cotton", "Georgette", "Chiffon", "Velvet", "Net"],
+  "Bridal Lehenga": ["Silk", "Cotton", "Georgette", "Chiffon", "Velvet", "Net"],
+  "Rajputi Poshak": ["Silk", "Cotton", "Georgette", "Chiffon", "Velvet", "Net"],
+};
+const NECK_TYPE_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
+  Lehenga: ["Round Neck", "V-Neck", "Sweetheart", "Boat Neck", "Off-Shoulder", "Halter Neck", "High Neck"],
+  "Bridal Lehenga": ["Round Neck", "V-Neck", "Sweetheart", "Boat Neck", "Off-Shoulder", "Halter Neck", "High Neck"],
+  "Rajputi Poshak": ["Round Neck", "V-Neck", "Sweetheart", "Boat Neck", "Off-Shoulder", "Halter Neck", "High Neck"],
+};
+const SLEEVE_TYPE_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
+  Lehenga: ["Sleeveless", "Half Sleeve", "Full Sleeve", "Elbow Length", "Three Quarter"],
+  "Bridal Lehenga": ["Sleeveless", "Half Sleeve", "Full Sleeve", "Elbow Length", "Three Quarter"],
+  "Rajputi Poshak": ["Sleeveless", "Half Sleeve", "Full Sleeve", "Elbow Length", "Three Quarter"],
+};
+const SET_INCLUDES_OPTIONS = ["Lehenga", "Blouse", "Dupatta"] as const;
+const WORK_TYPE_OPTIONS = ["Zari", "Embroidery", "Sequins", "Mirror Work", "Stone Work"] as const;
+const OCCASION_OPTIONS = ["Wedding", "Reception", "Engagement", "Festive"] as const;
+
+const isSareeCategory = (category: string) =>
+  SAREE_CATEGORIES.includes(category as (typeof SAREE_CATEGORIES)[number]);
+
+const isLehengaFamilyCategory = (category: string) =>
+  LEHENGA_FAMILY_CATEGORIES.includes(
+    category as (typeof LEHENGA_FAMILY_CATEGORIES)[number],
+  );
 
 // Image validation constants
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -102,6 +130,20 @@ interface ProductVariant {
   sizes: Record<string, { selected: boolean; stock: string }>;
   images: string[];
   sizeDetails?: string; // For Saree category - description of size
+  stitchType?: string;
+  fabric?: string;
+  neckType?: string;
+  sleeveType?: string;
+  setIncludes?: string[];
+  workType?: string[];
+  occasion?: string[];
+  measurements?: {
+    waist?: string;
+    bust?: string;
+    lehengaLength?: string;
+    dupattaLength?: string;
+    flare?: string;
+  };
 }
 
 interface ProductApiResponse {
@@ -110,7 +152,6 @@ interface ProductApiResponse {
   slug?: string;
   brand?: string;
   category?: string;
-  subCategory?: string;
   pattern?: string;
   sleeveType?: string;
   fabric?: string;
@@ -264,6 +305,44 @@ const VariantCard = memo(
       onUpdate(variant.id, { sizes: newSizes });
     };
 
+    const getBulkStockValue = (): string => {
+      if (isSareeCategory(category)) {
+        return variant.sizes["ONE_SIZE"]?.stock || "";
+      }
+      const selected = Object.entries(variant.sizes).filter(([, data]) => data.selected);
+      if (selected.length === 0) return "";
+      const values = selected.map(([, data]) => data.stock || "");
+      const first = values[0];
+      return values.every((value) => value === first) ? first : "";
+    };
+
+    const handleBulkStockChange = (raw: string) => {
+      const stock = sanitizeStockInput(raw);
+      if (isSareeCategory(category)) {
+        handleStockChange("ONE_SIZE", stock);
+        return;
+      }
+      const selected = Object.entries(variant.sizes).filter(([, data]) => data.selected);
+      if (selected.length === 0) return;
+      const nextSizes = { ...variant.sizes };
+      selected.forEach(([size]) => {
+        nextSizes[size] = { ...nextSizes[size], stock };
+      });
+      onUpdate(variant.id, { sizes: nextSizes });
+    };
+
+    const toggleMultiSelect = (
+      field: "setIncludes" | "workType" | "occasion",
+      option: string,
+    ) => {
+      const current = variant[field] || [];
+      const exists = current.includes(option);
+      const next = exists
+        ? current.filter((v) => v !== option)
+        : [...current, option];
+      onUpdate(variant.id, { [field]: next } as Partial<ProductVariant>);
+    };
+
     const selectedSizes = Object.entries(variant.sizes).filter(
       ([, data]) => data.selected,
     );
@@ -276,6 +355,7 @@ const VariantCard = memo(
     const hasUploadingImages = currentUploadStatuses.some(
       (status) => status.status === "uploading",
     );
+    const lehengaFlow = isLehengaFamilyCategory(category);
 
     return (
       <Card className="p-4 bg-white border border-gray-200 shadow-sm">
@@ -319,7 +399,7 @@ const VariantCard = memo(
           </Button>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="grid grid-cols-4 gap-3 mb-3">
           {/* Color */}
           <div className="space-y-1">
             <FieldLabel className="text-xs">
@@ -363,6 +443,21 @@ const VariantCard = memo(
               className="h-8 text-sm"
             />
           </div>
+
+          <div className="space-y-1">
+            <FieldLabel className="text-xs">
+              Stock <span className="text-red-500">*</span>
+            </FieldLabel>
+            <Input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="0"
+              value={getBulkStockValue()}
+              onChange={(e) => handleBulkStockChange(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
         </div>
 
         {priceError && (
@@ -395,7 +490,7 @@ const VariantCard = memo(
         )}
 
         {/* Sizes Selection - Hide for Saree category */}
-        {category !== "Saree" ? (
+        {!isSareeCategory(category) ? (
           <div className="space-y-2 mb-3">
             <FieldLabel className="text-xs">
               Sizes <span className="text-red-500">*</span>
@@ -441,7 +536,7 @@ const VariantCard = memo(
         )}
 
         {/* Stock per Size - For Saree, show single stock input */}
-        {category === "Saree" ? (
+        {isSareeCategory(category) ? (
           <div className="space-y-2 mb-3">
             <FieldLabel className="text-xs">
               Stock <span className="text-red-500">*</span>
@@ -482,6 +577,256 @@ const VariantCard = memo(
               </div>
             </div>
           )
+        )}
+
+        {lehengaFlow && (
+          <div className="space-y-3 mb-3 border-t border-gray-200 pt-3">
+            <h4 className="text-sm font-semibold text-gray-900">Product Attributes</h4>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <FieldLabel className="text-xs">Stitch Type</FieldLabel>
+                <Select
+                  value={variant.stitchType || ""}
+                  onValueChange={(value) => onUpdate(variant.id, { stitchType: value })}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(STITCH_TYPE_OPTIONS_BY_CATEGORY[category] || STITCH_TYPE_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <FieldLabel className="text-xs">
+                  Fabric <span className="text-red-500">*</span>
+                </FieldLabel>
+                <Select
+                  value={variant.fabric || ""}
+                  onValueChange={(value) => onUpdate(variant.id, { fabric: value })}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(FABRIC_OPTIONS_BY_CATEGORY[category] || FABRIC_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <FieldLabel className="text-xs">Set Includes</FieldLabel>
+              <div className="flex gap-2 flex-wrap">
+                {SET_INCLUDES_OPTIONS.map((option) => {
+                  const selected = (variant.setIncludes || []).includes(option);
+                  return (
+                    <Button
+                      key={option}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "h-8 px-3 border-2 transition-colors font-medium text-sm",
+                        selected
+                          ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
+                      )}
+                      onClick={() => toggleMultiSelect("setIncludes", option)}
+                    >
+                      {option}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <FieldLabel className="text-xs">Work Type</FieldLabel>
+              <div className="flex gap-2 flex-wrap">
+                {WORK_TYPE_OPTIONS.map((option) => {
+                  const selected = (variant.workType || []).includes(option);
+                  return (
+                    <Button
+                      key={option}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "h-8 px-3 border-2 transition-colors font-medium text-sm",
+                        selected
+                          ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
+                      )}
+                      onClick={() => toggleMultiSelect("workType", option)}
+                    >
+                      {option}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <FieldLabel className="text-xs">Occasion</FieldLabel>
+              <div className="flex gap-2 flex-wrap">
+                {OCCASION_OPTIONS.map((option) => {
+                  const selected = (variant.occasion || []).includes(option);
+                  return (
+                    <Button
+                      key={option}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "h-8 px-3 border-2 transition-colors font-medium text-sm",
+                        selected
+                          ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
+                      )}
+                      onClick={() => toggleMultiSelect("occasion", option)}
+                    >
+                      {option}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {category === "Bridal Lehenga" && (
+              <div className="border-t border-gray-200 pt-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <FieldLabel className="text-xs">Blouse Details</FieldLabel>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <FieldLabel className="text-xs">
+                      Neck Type <span className="text-red-500">*</span>
+                    </FieldLabel>
+                    <Select
+                      value={variant.neckType || ""}
+                      onValueChange={(value) => onUpdate(variant.id, { neckType: value })}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(NECK_TYPE_OPTIONS_BY_CATEGORY[category] || NECK_TYPE_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <FieldLabel className="text-xs">
+                      Sleeve Type <span className="text-red-500">*</span>
+                    </FieldLabel>
+                    <Select
+                      value={variant.sleeveType || ""}
+                      onValueChange={(value) => onUpdate(variant.id, { sleeveType: value })}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(SLEEVE_TYPE_OPTIONS_BY_CATEGORY[category] || SLEEVE_TYPE_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-gray-200 pt-3">
+              <h5 className="text-base font-semibold text-gray-800">Measurements (Optional)</h5>
+              <p className="text-xs text-gray-500 mb-3">Add custom measurements</p>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-600">Waist</label>
+                  <Input
+                    placeholder="e.g., 32 in"
+                    value={variant.measurements?.waist || ""}
+                    onChange={(e) =>
+                      onUpdate(variant.id, {
+                        measurements: { ...variant.measurements, waist: e.target.value },
+                      })
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-600">Bust</label>
+                  <Input
+                    placeholder="e.g., 32 in"
+                    value={variant.measurements?.bust || ""}
+                    onChange={(e) =>
+                      onUpdate(variant.id, {
+                        measurements: { ...variant.measurements, bust: e.target.value },
+                      })
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-600">Lehenga Length</label>
+                  <Input
+                    placeholder="e.g., 32 in"
+                    value={variant.measurements?.lehengaLength || ""}
+                    onChange={(e) =>
+                      onUpdate(variant.id, {
+                        measurements: {
+                          ...variant.measurements,
+                          lehengaLength: e.target.value,
+                        },
+                      })
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-600">Dupatta Length</label>
+                  <Input
+                    placeholder="e.g., 32 in"
+                    value={variant.measurements?.dupattaLength || ""}
+                    onChange={(e) =>
+                      onUpdate(variant.id, {
+                        measurements: {
+                          ...variant.measurements,
+                          dupattaLength: e.target.value,
+                        },
+                      })
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="mt-2 max-w-[25%] space-y-1">
+                <label className="text-xs text-gray-600">Flare</label>
+                <Input
+                  placeholder="e.g., 32 in"
+                  value={variant.measurements?.flare || ""}
+                  onChange={(e) =>
+                    onUpdate(variant.id, {
+                      measurements: { ...variant.measurements, flare: e.target.value },
+                    })
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Auto-generated SKUs */}
@@ -622,6 +967,27 @@ const AddEditProductPage = () => {
   >({});
   const [description, setDescription] = useState("");
 
+  const buildInitialVariant = (category: string): ProductVariant => {
+    const sareeFlow = isSareeCategory(category);
+    return {
+      id: crypto.randomUUID(),
+      color: "",
+      sellingPrice: "",
+      mrp: "",
+      sizes: sareeFlow ? { ONE_SIZE: { selected: true, stock: "" } } : {},
+      images: [],
+      sizeDetails: sareeFlow ? "" : undefined,
+      stitchType: "",
+      fabric: "",
+      neckType: "",
+      sleeveType: "",
+      setIncludes: [],
+      workType: [],
+      occasion: [],
+      measurements: {},
+    };
+  };
+
   // Fetch product by ID when editing
   const {
     data: productResponse,
@@ -675,7 +1041,6 @@ const AddEditProductPage = () => {
       productName: "",
       brand: "",
       category: "",
-      subCategory: "",
       pattern: "",
       sleeveType: "",
       fabric: "",
@@ -697,28 +1062,17 @@ const AddEditProductPage = () => {
         return;
       }
 
-      // Validate pattern
-      if (!value.pattern || value.pattern.trim() === "") {
-        showError("Pattern is required");
-        return;
-      }
+      const sareeFlow = isSareeCategory(value.category);
+      const lehengaFlow = isLehengaFamilyCategory(value.category);
 
-      // Validate fabric
-      if (!value.fabric || value.fabric.trim() === "") {
-        showError("Fabric is required");
-        return;
-      }
-
-      // Validate neck type (not required for Saree)
-      if (value.category !== "Saree") {
-        if (!value.neckType || value.neckType.trim() === "") {
-          showError("Neck Type is required");
+      // Keep existing Saree validation flow unchanged
+      if (sareeFlow) {
+        if (!value.pattern || value.pattern.trim() === "") {
+          showError("Pattern is required");
           return;
         }
-
-        // Validate sleeve type (not required for Saree)
-        if (!value.sleeveType || value.sleeveType.trim() === "") {
-          showError("Sleeve Type is required");
+        if (!value.fabric || value.fabric.trim() === "") {
+          showError("Fabric is required");
           return;
         }
       }
@@ -729,7 +1083,7 @@ const AddEditProductPage = () => {
         return;
       }
 
-      const isSareeCategory = value.category === "Saree";
+      const isSareeFlow = isSareeCategory(value.category);
 
       for (const variant of variants) {
         if (!variant.color.trim()) {
@@ -750,7 +1104,7 @@ const AddEditProductPage = () => {
         }
         
         // For Saree category, validate ONE_SIZE stock
-        if (isSareeCategory) {
+        if (isSareeFlow) {
           const oneSize = variant.sizes["ONE_SIZE"];
           if (!oneSize || !oneSize.stock || parseInt(oneSize.stock) < 0) {
             showError(`Variant "${variant.color}" must have valid stock`);
@@ -777,6 +1131,23 @@ const AddEditProductPage = () => {
             }
           }
         }
+
+        if (lehengaFlow) {
+          if (!variant.fabric) {
+            showError(`Variant "${variant.color}" must have fabric selected`);
+            return;
+          }
+          if (value.category === "Bridal Lehenga") {
+            if (!variant.neckType) {
+              showError(`Variant "${variant.color}" must have neck type selected`);
+              return;
+            }
+            if (!variant.sleeveType) {
+              showError(`Variant "${variant.color}" must have sleeve type selected`);
+              return;
+            }
+          }
+        }
       }
 
       // Prepare payload
@@ -784,7 +1155,7 @@ const AddEditProductPage = () => {
       const allColors = variants.map((v) => v.color);
       
       // For Saree category, use "ONE SIZE", otherwise collect selected sizes
-      const allSizes = isSareeCategory
+      const allSizes = isSareeFlow
         ? ["ONE SIZE"]
         : Array.from(
             new Set(
@@ -823,7 +1194,6 @@ const AddEditProductPage = () => {
         allSizes,
         avgPrice,
         totalStock,
-        subCategory: value.subCategory || undefined, // Include subCategory
       };
 
       // Console log form values
@@ -841,12 +1211,11 @@ const AddEditProductPage = () => {
           colors: allColors,
           description: description,
           category: value.category,
-          subCategory: value.subCategory || undefined,
           brand: value.brand,
-          pattern: value.pattern,
-          fabric: value.fabric,
-          neckType: value.neckType || undefined,
-          sleeveType: value.sleeveType || undefined,
+          pattern: sareeFlow ? value.pattern : undefined,
+          fabric: sareeFlow ? value.fabric : undefined,
+          neckType: sareeFlow ? value.neckType || undefined : undefined,
+          sleeveType: sareeFlow ? value.sleeveType || undefined : undefined,
           variants: variants, // Include variants array
           allImages,
           allColors,
@@ -862,11 +1231,10 @@ const AddEditProductPage = () => {
           productName: value.productName,
           brand: value.brand,
           category: value.category,
-          subCategory: value.subCategory || undefined,
-          pattern: value.pattern,
-          fabric: value.fabric,
-          neckType: value.neckType || undefined,
-          sleeveType: value.sleeveType || undefined,
+          pattern: sareeFlow ? value.pattern : undefined,
+          fabric: sareeFlow ? value.fabric : undefined,
+          neckType: sareeFlow ? value.neckType || undefined : undefined,
+          sleeveType: sareeFlow ? value.sleeveType || undefined : undefined,
           description: description,
           variants: variants, // Include variants array
           images: allImages,
@@ -888,22 +1256,7 @@ const AddEditProductPage = () => {
 
   // Variant handlers
   const addVariant = () => {
-    const isSareeCategory = form.state.values.category === "Saree";
-    const initialSizes: Record<string, { selected: boolean; stock: string }> = isSareeCategory
-      ? { ONE_SIZE: { selected: true, stock: "" } }
-      : {};
-    
-    const newVariant: ProductVariant = {
-      id: crypto.randomUUID(),
-      color: "",
-      sellingPrice: "",
-      mrp: "",
-      sizes: initialSizes,
-      images: [],
-      sizeDetails: isSareeCategory ? "" : undefined,
-    };
-      
-    setVariants([...variants, newVariant]);
+    setVariants([...variants, buildInitialVariant(form.state.values.category)]);
   };
 
   const updateVariant = (id: string, updates: Partial<ProductVariant>) => {
@@ -1058,6 +1411,14 @@ const AddEditProductPage = () => {
         sizes: sizesObject,
         images: apiVariant.images,
         sizeDetails: apiVariant.sizeDetails,
+        stitchType: product.pattern ?? "",
+        fabric: product.fabric ?? "",
+        neckType: product.neckType ?? "",
+        sleeveType: product.sleeveType ?? "",
+        setIncludes: [],
+        workType: [],
+        occasion: [],
+        measurements: {},
       };
     });
     
@@ -1068,7 +1429,6 @@ const AddEditProductPage = () => {
       productName: product.name ?? "",
       brand: product.brand ?? "",
       category: product.category ?? "",
-      subCategory: product.subCategory ?? "",
       pattern: product.pattern ?? "",
       sleeveType: product.sleeveType ?? "",
       fabric: product.fabric ?? "",
@@ -1093,8 +1453,7 @@ const AddEditProductPage = () => {
     
     setDescription(product.description ?? "");
     
-    // Set category and subCategory LAST to prevent triggering category change effect prematurely
-    form.setFieldValue("subCategory", formValues.subCategory);
+    // Set category LAST to prevent triggering category change effect prematurely
     form.setFieldValue("category", formValues.category);
     
     // Mark as populated AFTER setting category
@@ -1104,102 +1463,20 @@ const AddEditProductPage = () => {
     }, 100);
   }, [product, hasPopulatedForm, isEditMode, form]);
 
-  // Update variants when category changes to/from Saree
-  useEffect(() => {
-    const currentCategory = form.state.values.category;
-    
-    console.log("🔶 Category change effect triggered:", {
-      category: currentCategory,
-      isEditMode,
-      hasPopulatedForm,
-      variantsCount: variants.length
-    });
-    
-    // Skip in edit mode until form is fully populated
-    if (isEditMode && !hasPopulatedForm) {
-      console.log("⏭️ Skipping category change - edit mode not populated yet");
-      return;
-    }
-    
-    if (!currentCategory) {
-      // If no category selected, reset variants to initial state (only in create mode)
-      if (!isEditMode) {
-        console.log("🔶 No category - resetting variants (create mode)");
-        setVariants([
-          {
-            id: crypto.randomUUID(),
-            color: "",
-            sellingPrice: "",
-            mrp: "",
-            sizes: {},
-            images: [],
-          },
-        ]);
-      }
-      return;
-    }
-    
-    const isSareeCategory = currentCategory === "Saree";
-    console.log("🔶 Category is Saree?", isSareeCategory);
-    
-    setVariants(prevVariants => {
-      console.log("🔶 Previous variants before transformation:", prevVariants);
-      
-      // If no variants exist, create one with appropriate structure
-      if (prevVariants.length === 0) {
-        console.log("🔶 No variants - creating new one");
-        const sizes: Record<string, { selected: boolean; stock: string }> = isSareeCategory
-          ? { ONE_SIZE: { selected: true, stock: "" } }
-          : {};
-        return [{
-          id: crypto.randomUUID(),
-          color: "",
-          sellingPrice: "",
-          mrp: "",
-          sizes,
-          images: [],
-          sizeDetails: isSareeCategory ? "" : undefined,
-        }];
-      }
-      
-      // In edit mode with populated form, preserve existing variant data
-      if (isEditMode && hasPopulatedForm) {
-        console.log("✅ Edit mode with populated form - preserving variant sizes");
-        // Only convert if user is actively changing category (not on initial load)
-        // For now, preserve the loaded data
-        return prevVariants;
-      }
-      
-      // In create mode or when user manually changes category, apply transformations
-      console.log("🔶 Applying category-based transformations");
-      return prevVariants.map(variant => {
-        if (isSareeCategory) {
-          // Convert to ONE_SIZE for Saree category
-          const sizes: Record<string, { selected: boolean; stock: string }> = { 
-            ONE_SIZE: { selected: true, stock: "" } 
-          };
-          const newVariant: ProductVariant = {
-            ...variant,
-            sizes,
-            sizeDetails: variant.sizeDetails || "",
-          };
-          return newVariant;
-        } else {
-          // For non-Saree, keep existing sizes in edit mode, reset in create mode
-          if (isEditMode) {
-            return variant; // Preserve sizes
-          }
-          const sizes: Record<string, { selected: boolean; stock: string }> = {};
-          const newVariant: ProductVariant = {
-            ...variant,
-            sizes,
-          };
-          delete newVariant.sizeDetails;
-          return newVariant;
-        }
-      });
-    });
-  }, [form.state.values.category, hasPopulatedForm, isEditMode, variants.length]);
+  const resetFormForCategory = (nextCategory: string) => {
+    form.setFieldValue("category", nextCategory);
+    form.setFieldValue("productName", "");
+    form.setFieldValue("brand", "");
+    form.setFieldValue("pattern", "");
+    form.setFieldValue("sleeveType", "");
+    form.setFieldValue("fabric", "");
+    form.setFieldValue("neckType", "");
+    form.setFieldValue("description", "");
+    setDescription("");
+    setDescriptionError("");
+    setUploadingImages({});
+    setVariants([buildInitialVariant(nextCategory)]);
+  };
 
   if (isEditMode && (isLoadingProduct || (product && !hasPopulatedForm))) {
     return (
@@ -1267,507 +1544,142 @@ const AddEditProductPage = () => {
                 }}
               >
                 <FieldGroup className="space-y-3">
-                  {/* Product Name and Brand */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <form.Field
-                        name="productName"
-                        validators={{
-                          onChange: z
-                            .string()
-                            .min(1, "Product name is required")
-                            .trim(),
-                        }}
-                      >
-                        {(field) => {
-                          const isInvalid =
-                            field.state.meta.isTouched &&
-                            field.state.meta.errors.length > 0;
-                          return (
-                            <Field data-invalid={isInvalid}>
-                              <FieldLabel
-                                htmlFor="productName"
-                                className="text-xs"
-                              >
-                                Product Name{" "}
-                                <span className="text-red-500">*</span>
-                              </FieldLabel>
-                              <Input
-                                id="productName"
-                                placeholder="Parika"
-                                value={field.state.value}
-                                onChange={(e) =>
-                                  field.handleChange(e.target.value)
-                                }
-                                onBlur={field.handleBlur}
-                                className="h-8 text-sm"
-                              />
-                              {isInvalid && (
-                                <FieldError
-                                  errors={field.state.meta.errors.map((err) =>
-                                    typeof err === "string"
-                                      ? { message: err }
-                                      : err,
-                                  )}
-                                />
-                              )}
-                            </Field>
-                          );
-                        }}
+                      <form.Field name="category" validators={{ onChange: z.string().min(1, "Category is required").trim() }}>
+                        {(field) => (
+                          <Field data-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}>
+                            <FieldLabel htmlFor="category" className="text-xs">Category <span className="text-red-500">*</span></FieldLabel>
+                            <Select
+                              value={field.state.value}
+                              onValueChange={(value) => {
+                                if (value === field.state.value) return;
+                                resetFormForCategory(value);
+                                field.handleBlur();
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Lehenga">Lehenga</SelectItem>
+                                <SelectItem value="Bridal Lehenga">Bridal Lehenga</SelectItem>
+                                <SelectItem value="Rajputi Poshak">Rajputi Poshak</SelectItem>
+                                <SelectItem value="Saree">Saree</SelectItem>
+                                <SelectItem value="Banarasi Sarees">Banarasi Sarees</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+                        )}
                       </form.Field>
                     </div>
+
                     <div className="space-y-1">
-                      <form.Field
-                        name="brand"
-                        validators={{
-                          onChange: z
-                            .string()
-                            .min(1, "Brand is required")
-                            .trim(),
-                        }}
-                      >
-                        {(field) => {
-                          const isInvalid =
-                            field.state.meta.isTouched &&
-                            field.state.meta.errors.length > 0;
-                          return (
-                            <Field data-invalid={isInvalid}>
-                              <FieldLabel htmlFor="brand" className="text-xs">
-                                Brand <span className="text-red-500">*</span>
-                              </FieldLabel>
-                              <Input
-                                id="brand"
-                                placeholder="test"
-                                value={field.state.value}
-                                onChange={(e) =>
-                                  field.handleChange(e.target.value)
-                                }
-                                onBlur={field.handleBlur}
-                                className="h-8 text-sm"
-                              />
-                              {isInvalid && (
-                                <FieldError
-                                  errors={field.state.meta.errors.map((err) =>
-                                    typeof err === "string"
-                                      ? { message: err }
-                                      : err,
-                                  )}
-                                />
-                              )}
-                            </Field>
-                          );
-                        }}
+                      <form.Field name="productName" validators={{ onChange: z.string().min(1, "Product name is required").trim() }}>
+                        {(field) => (
+                          <Field data-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}>
+                            <FieldLabel htmlFor="productName" className="text-xs">Product Name <span className="text-red-500">*</span></FieldLabel>
+                            <Input
+                              id="productName"
+                              placeholder="Parika"
+                              value={field.state.value}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              onBlur={field.handleBlur}
+                              className="h-8 text-sm"
+                            />
+                          </Field>
+                        )}
                       </form.Field>
                     </div>
                   </div>
 
-                  {/* Category and Sub-Category */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <form.Field
-                        name="category"
-                        validators={{
-                          onChange: z
-                            .string()
-                            .min(1, "Category is required")
-                            .trim(),
-                        }}
-                      >
-                        {(field) => {
-                          const isInvalid =
-                            field.state.meta.isTouched &&
-                            field.state.meta.errors.length > 0;
-                          return (
-                            <Field data-invalid={isInvalid}>
-                              <FieldLabel
-                                htmlFor="category"
-                                className="text-xs"
-                              >
-                                Category <span className="text-red-500">*</span>
-                              </FieldLabel>
-                              <Select
-                                value={field.state.value}
-                                onValueChange={(value) => {
-                                  field.handleChange(value);
-                                  field.handleBlur();
-                                  // Reset sub-category when category changes
-                                  form.setFieldValue("subCategory", "");
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue placeholder="Select category" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Lehenga">Lehenga</SelectItem>
-                                  <SelectItem value="Rajputi Poshak">Rajputi Poshak</SelectItem>
-                                  <SelectItem value="Saree">Saree</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {isInvalid && (
-                                <FieldError
-                                  errors={field.state.meta.errors.map((err) =>
-                                    typeof err === "string"
-                                      ? { message: err }
-                                      : err,
-                                  )}
-                                />
-                              )}
-                            </Field>
-                          );
-                        }}
-                      </form.Field>
-                    </div>
-                    <div className="space-y-1">
-                      <form.Field name="subCategory">
-                        {(field) => {
-                          const selectedCategory = form.state.values.category;
-                          const subCategories = selectedCategory
-                            ? CATEGORY_SUBCATEGORY_MAP[selectedCategory] || []
-                            : [];
-                          const hasSubCategories = subCategories.length > 0;
-
-                          return (
-                            <Field>
-                              <FieldLabel
-                                htmlFor="subCategory"
-                                className="text-xs"
-                              >
-                                Sub Category (Optional)
-                              </FieldLabel>
-                              <Select
-                                value={field.state.value}
-                                onValueChange={(value) => {
-                                  field.handleChange(value);
-                                  field.handleBlur();
-                                }}
-                                disabled={!hasSubCategories}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue 
-                                    placeholder={
-                                      hasSubCategories
-                                        ? "Select sub-category"
-                                        : "Select category first"
-                                    } 
-                                  />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {subCategories.map((subCat) => (
-                                    <SelectItem key={subCat} value={subCat}>
-                                      {subCat}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </Field>
-                          );
-                        }}
-                      </form.Field>
-                    </div>
-                  </div>
-
-                  {/* Pattern */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <form.Field
-                        name="pattern"
-                        validators={{
-                          onChange: z
-                            .string()
-                            .min(1, "Pattern is required")
-                            .trim(),
-                        }}
-                      >
-                        {(field) => {
-                          const isInvalid =
-                            field.state.meta.isTouched &&
-                            field.state.meta.errors.length > 0;
-                          return (
-                            <Field data-invalid={isInvalid}>
-                              <FieldLabel htmlFor="pattern" className="text-xs">
-                                Pattern <span className="text-red-500">*</span>
-                              </FieldLabel>
-                              <Select
-                                value={field.state.value}
-                                onValueChange={(value) => {
-                                  field.handleChange(value);
-                                  field.handleBlur();
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue placeholder="Select pattern" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="solid">Solid</SelectItem>
-                                  <SelectItem value="printed">
-                                    Printed
-                                  </SelectItem>
-                                  <SelectItem value="embroidered">
-                                    Embroidered
-                                  </SelectItem>
-                                  <SelectItem value="striped">
-                                    Striped
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {isInvalid && (
-                                <FieldError
-                                  errors={field.state.meta.errors.map((err) =>
-                                    typeof err === "string"
-                                      ? { message: err }
-                                      : err,
-                                  )}
-                                />
-                              )}
-                            </Field>
-                          );
-                        }}
-                      </form.Field>
-                    </div>
-                  </div>
-
-                  {/* Fabric and Neck Type */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <form.Field
-                        name="fabric"
-                        validators={{
-                          onChange: z
-                            .string()
-                            .min(1, "Fabric is required")
-                            .trim(),
-                        }}
-                      >
-                        {(field) => {
-                          const isInvalid =
-                            field.state.meta.isTouched &&
-                            field.state.meta.errors.length > 0;
-                          return (
-                            <Field data-invalid={isInvalid}>
-                              <FieldLabel htmlFor="fabric" className="text-xs">
-                                Fabric <span className="text-red-500">*</span>
-                              </FieldLabel>
-                              <Select
-                                value={field.state.value}
-                                onValueChange={(value) => {
-                                  field.handleChange(value);
-                                  field.handleBlur();
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue placeholder="Select fabric" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="cotton">Cotton</SelectItem>
-                                  <SelectItem value="silk">Silk</SelectItem>
-                                  <SelectItem value="georgette">
-                                    Georgette
-                                  </SelectItem>
-                                  <SelectItem value="chiffon">
-                                    Chiffon
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {isInvalid && (
-                                <FieldError
-                                  errors={field.state.meta.errors.map((err) =>
-                                    typeof err === "string"
-                                      ? { message: err }
-                                      : err,
-                                  )}
-                                />
-                              )}
-                            </Field>
-                          );
-                        }}
-                      </form.Field>
-                    </div>
-                    
-                    {/* Neck Type - Hide for Saree category */}
-                    {form.state.values.category !== "Saree" && (
-                      <div className="space-y-1">
-                        <form.Field
-                          name="neckType"
-                          validators={{
-                            onChange: z
-                              .string()
-                              .min(1, "Neck Type is required")
-                              .trim(),
-                          }}
-                        >
-                          {(field) => {
-                            const isInvalid =
-                              field.state.meta.isTouched &&
-                              field.state.meta.errors.length > 0;
-                            return (
-                              <Field data-invalid={isInvalid}>
-                                <FieldLabel
-                                  htmlFor="neckType"
-                                  className="text-xs"
-                                >
-                                  Neck Type{" "}
-                                  <span className="text-red-500">*</span>
-                                </FieldLabel>
-                                <Select
-                                  value={field.state.value}
-                                  onValueChange={(value) => {
-                                    field.handleChange(value);
-                                    field.handleBlur();
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 text-sm">
-                                    <SelectValue placeholder="Select neck type" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="v-neck">V-Neck</SelectItem>
-                                    <SelectItem value="round">Round</SelectItem>
-                                    <SelectItem value="collar">Collar</SelectItem>
-                                    <SelectItem value="boat">Boat</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                {isInvalid && (
-                                  <FieldError
-                                    errors={field.state.meta.errors.map((err) =>
-                                      typeof err === "string"
-                                        ? { message: err }
-                                        : err,
-                                    )}
-                                  />
-                                )}
+                  {form.state.values.category && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <form.Field name="brand" validators={{ onChange: z.string().min(1, "Brand is required").trim() }}>
+                            {(field) => (
+                              <Field data-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}>
+                                <FieldLabel htmlFor="brand" className="text-xs">Brand <span className="text-red-500">*</span></FieldLabel>
+                                <Input id="brand" placeholder="Brand" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} className="h-8 text-sm" />
                               </Field>
-                            );
-                          }}
-                        </form.Field>
+                            )}
+                          </form.Field>
+                        </div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Sleeve Type - Hide for Saree category */}
-                  {form.state.values.category !== "Saree" && (
-                    <div className="space-y-1">
-                      <form.Field
-                        name="sleeveType"
-                        validators={{
-                          onChange: z
-                            .string()
-                            .min(1, "Sleeve Type is required")
-                            .trim(),
-                        }}
-                      >
-                        {(field) => {
-                          const isInvalid =
-                            field.state.meta.isTouched &&
-                            field.state.meta.errors.length > 0;
-                          return (
-                            <Field data-invalid={isInvalid}>
-                              <FieldLabel
-                                htmlFor="sleeveType"
-                                className="text-xs"
-                              >
-                                Sleeve Type{" "}
-                                <span className="text-red-500">*</span>
-                              </FieldLabel>
-                              <Select
-                                value={field.state.value}
-                                onValueChange={(value) => {
-                                  field.handleChange(value);
-                                  field.handleBlur();
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue placeholder="Select sleeve type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="half-sleeve">
-                                    Half Sleeve
-                                  </SelectItem>
-                                  <SelectItem value="full-sleeve">
-                                    Full Sleeve
-                                  </SelectItem>
-                                  <SelectItem value="sleeveless">
-                                    Sleeveless
-                                  </SelectItem>
-                                  <SelectItem value="3/4-sleeve">
-                                    3/4 Sleeve
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {isInvalid && (
-                                <FieldError
-                                  errors={field.state.meta.errors.map((err) =>
-                                    typeof err === "string"
-                                      ? { message: err }
-                                      : err,
-                                  )}
-                                />
+                      {isSareeCategory(form.state.values.category) && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <form.Field name="pattern">
+                              {(field) => (
+                                <Field>
+                                  <FieldLabel className="text-xs">Pattern <span className="text-red-500">*</span></FieldLabel>
+                                  <Select value={field.state.value} onValueChange={(value) => field.handleChange(value)}>
+                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select pattern" /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="solid">Solid</SelectItem>
+                                      <SelectItem value="printed">Printed</SelectItem>
+                                      <SelectItem value="embroidered">Embroidered</SelectItem>
+                                      <SelectItem value="striped">Striped</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
                               )}
-                            </Field>
-                          );
-                        }}
-                      </form.Field>
-                    </div>
-                  )}
-
-                  {/* Description with CKEditor */}
-                  <div className="space-y-1">
-                    <FieldLabel htmlFor="description" className="text-xs">
-                      Description <span className="text-red-500">*</span>
-                    </FieldLabel>
-                    <div
-                      className={cn(
-                        "border rounded-lg overflow-hidden min-h-[180px]",
-                        descriptionError ? "border-red-500" : "border-gray-300",
+                            </form.Field>
+                          </div>
+                          <div />
+                        </div>
                       )}
-                    >
-                      <CKEditor
-                        editor={ClassicEditor}
-                        config={{
-                          licenseKey: "GPL",
-                          plugins: [
-                            Essentials,
-                            Bold,
-                            Italic,
-                            Paragraph,
-                            Link,
-                            List,
-                            Undo,
-                            Underline,
-                            Font
-                          ],
-                          toolbar: [
-                            "undo",
-                            "redo",
-                            "|",
-                            "bold",
-                            "italic",
-                            "underline",
-                            "|",
-                            "bulletedList",
-                            "numberedList",
-                            "|",
-                            "link",
-                            "fontColor",
-                            "fontBackgroundColor"
-                          ],
-                          placeholder: "Enter product description...",
-                        }}
-                        data={description}
-                        onChange={(
-                          _event: unknown,
-                          editor: { getData: () => string },
-                        ) => {
-                          const data = editor.getData();
-                          setDescription(data);
-                          if (data && data.trim()) {
-                            setDescriptionError("");
-                          }
-                        }}
-                      />
-                    </div>
-                    {descriptionError && (
-                      <p className="text-xs text-red-500">{descriptionError}</p>
-                    )}
-                  </div>
+
+                      {isSareeCategory(form.state.values.category) && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <form.Field name="fabric">
+                              {(field) => (
+                                <Field>
+                                  <FieldLabel className="text-xs">Fabric <span className="text-red-500">*</span></FieldLabel>
+                                  <Select value={field.state.value} onValueChange={(value) => field.handleChange(value)}>
+                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select fabric" /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="cotton">Cotton</SelectItem>
+                                      <SelectItem value="silk">Silk</SelectItem>
+                                      <SelectItem value="georgette">Georgette</SelectItem>
+                                      <SelectItem value="chiffon">Chiffon</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+                              )}
+                            </form.Field>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <FieldLabel htmlFor="description" className="text-xs">
+                          Description <span className="text-red-500">*</span>
+                        </FieldLabel>
+                        <div className={cn("border rounded-lg overflow-hidden min-h-[180px]", descriptionError ? "border-red-500" : "border-gray-300")}>
+                          <CKEditor
+                            editor={ClassicEditor}
+                            config={{
+                              licenseKey: "GPL",
+                              plugins: [Essentials, Bold, Italic, Paragraph, Link, List, Undo, Underline, Font],
+                              toolbar: ["undo", "redo", "|", "bold", "italic", "underline", "|", "bulletedList", "numberedList", "|", "link", "fontColor", "fontBackgroundColor"],
+                              placeholder: "Enter product description...",
+                            }}
+                            data={description}
+                            onChange={(_event: unknown, editor: { getData: () => string }) => {
+                              const data = editor.getData();
+                              setDescription(data);
+                              if (data && data.trim()) setDescriptionError("");
+                            }}
+                          />
+                        </div>
+                        {descriptionError && <p className="text-xs text-red-500">{descriptionError}</p>}
+                      </div>
+                    </>
+                  )}
                 </FieldGroup>
               </form>
             </Card>
@@ -1850,7 +1762,6 @@ const AddEditProductPage = () => {
               productName={form.state.values.productName}
               brand={form.state.values.brand}
               category={form.state.values.category}
-              subCategory={form.state.values.subCategory}
               description={description}
               variants={variants}
             />

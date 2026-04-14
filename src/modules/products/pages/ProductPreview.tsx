@@ -12,6 +12,14 @@ interface ProductVariant {
   mrp: string;
   sizes: Record<string, { selected: boolean; stock: string }>;
   images: string[];
+  subCategory?: string;
+  stitchType?: string;
+  fabric?: string;
+  neckType?: string;
+  sleeveType?: string;
+  setIncludes?: string[];
+  workType?: string[];
+  occasion?: string[];
 }
 
 interface ProductPreviewProps {
