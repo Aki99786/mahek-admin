@@ -81,11 +81,13 @@ const WORK_TYPE_OPTIONS = ["Zari", "Embroidery", "Sequins", "Mirror Work", "Ston
 const OCCASION_OPTIONS = ["Wedding", "Reception", "Engagement", "Festive"] as const;
 
 const isSareeCategory = (category: string) =>
-  SAREE_CATEGORIES.includes(category as (typeof SAREE_CATEGORIES)[number]);
+  SAREE_CATEGORIES.includes(
+    category.trim() as (typeof SAREE_CATEGORIES)[number],
+  );
 
 const isLehengaFamilyCategory = (category: string) =>
   LEHENGA_FAMILY_CATEGORIES.includes(
-    category as (typeof LEHENGA_FAMILY_CATEGORIES)[number],
+    category.trim() as (typeof LEHENGA_FAMILY_CATEGORIES)[number],
   );
 
 const cleanPayloadValue = (value: unknown): unknown => {
@@ -94,16 +96,17 @@ const cleanPayloadValue = (value: unknown): unknown => {
   }
 
   if (Array.isArray(value)) {
-    return value
+    const cleanedArray = value
       .map((item) => cleanPayloadValue(item))
       .filter((item) => item !== undefined);
+    return cleanedArray.length > 0 ? cleanedArray : undefined;
   }
 
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .map(([key, nestedValue]) => [key, cleanPayloadValue(nestedValue)] as const)
       .filter(([, nestedValue]) => nestedValue !== undefined);
-    return Object.fromEntries(entries);
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   }
 
   return value;
@@ -115,7 +118,6 @@ const OMITTED_PAYLOAD_KEYS = new Set([
   "allSizes",
   "avgPrice",
   "colors",
-  "images",
   "stockCount",
   "totalStock",
   "sizes",
@@ -197,6 +199,7 @@ interface ProductApiResponse {
   description?: string;
   isActive?: boolean;
   isFeatured?: boolean;
+  isPreOrder?: boolean;
   avgPrice: number;
   totalStock: number;
   allImages: string[];
@@ -1188,6 +1191,8 @@ const AddEditProductPage = () => {
       productName: "",
       brand: "",
       category: "",
+      isPreOrder: false,
+      isFeatured: true,
       pattern: "",
       sleeveType: "",
       fabric: "",
@@ -1331,77 +1336,85 @@ const AddEditProductPage = () => {
         );
       }, 0);
       
-      console.log('variants: ', variants);
-      const formData = {
-        ...value,
-        description: description,
-        variants: variants,
-        allImages,
-        allColors,
-        allSizes,
-        avgPrice,
-        totalStock,
-      };
+      const isFeatured =
+        typeof value.isFeatured === "boolean"
+          ? value.isFeatured
+          : (product?.isFeatured ?? false);
+      const isPreOrder =
+        typeof value.isPreOrder === "boolean"
+          ? value.isPreOrder
+          : (product?.isPreOrder ?? false);
+      const lehengaVariantsPayload = variants.map((variant) => ({
+        color: variant.color,
+        sellingPrice: variant.sellingPrice,
+        mrp: variant.mrp,
+        sizes: variant.sizes,
+        images: variant.images,
+        stitchType: variant.stitchType,
+        fabric: variant.fabric,
+        neckType: variant.neckType,
+        sleeveType: variant.sleeveType,
+        setIncludes: variant.setIncludes,
+        workType: variant.workType,
+        occasion: variant.occasion,
+        measurements: variant.measurements,
+      }));
+      const sareeVariantsPayload = variants.map((variant) => ({
+        color: variant.color,
+        sellingPrice: variant.sellingPrice,
+        mrp: variant.mrp,
+        sizes: variant.sizes,
+        images: variant.images,
+      }));
+
+      const basePayload = lehengaFlow
+        ? {
+            productName: value.productName,
+            brand: value.brand,
+            category: value.category,
+            description,
+            isFeatured,
+            variants: lehengaVariantsPayload,
+          }
+        : sareeFlow
+          ? {
+              productName: value.productName,
+              brand: value.brand,
+              category: value.category,
+              fabric: value.fabric,
+              pattern: value.pattern,
+              description,
+              isPreOrder,
+              isFeatured,
+              variants: sareeVariantsPayload,
+            }
+          : {
+            productName: value.productName,
+            brand: value.brand,
+            category: value.category,
+            isFeatured,
+            description,
+            variants,
+            price: lehengaFlow ? undefined : avgPrice,
+            images: allImages,
+          };
 
       // Console log form values
       console.log("=== FORM SUBMISSION ===");
-      console.log("Form Values:", formData);
+      console.log("Form Values:", basePayload);
       console.log("======================");
 
       if (isEditMode && id) {
-        const updatePayload = {
-          name: value.productName,
-          price: avgPrice,
-          stock: totalStock,
-          sizes: allSizes,
-          images: allImages,
-          colors: allColors,
-          description: description,
-          category: value.category,
-          brand: value.brand,
-          pattern: sareeFlow ? value.pattern : undefined,
-          fabric: sareeFlow ? value.fabric : undefined,
-          neckType: sareeFlow ? value.neckType || undefined : undefined,
-          sleeveType: sareeFlow ? value.sleeveType || undefined : undefined,
-          variants: variants, // Include variants array
-          allImages,
-          allColors,
-          allSizes,
-          avgPrice,
-          totalStock,
-          isActive: true,
-        };
         const cleanedUpdatePayload =
-          (cleanPayloadValue(updatePayload) as Record<string, unknown>) ?? {};
+          (cleanPayloadValue(basePayload) as Record<string, unknown>) ?? {};
         const finalUpdatePayload = omitPayloadKeys(cleanedUpdatePayload);
-        console.log('updatePayload: ', finalUpdatePayload);
+        console.log("updatePayload: ", finalUpdatePayload);
         updateMutation.mutate({ id, payload: finalUpdatePayload });
       } else {
-        const createPayload = {
-          productName: value.productName,
-          brand: value.brand,
-          category: value.category,
-          pattern: sareeFlow ? value.pattern : undefined,
-          fabric: sareeFlow ? value.fabric : undefined,
-          neckType: sareeFlow ? value.neckType || undefined : undefined,
-          sleeveType: sareeFlow ? value.sleeveType || undefined : undefined,
-          description: description,
-          variants: variants, // Include variants array
-          images: allImages,
-          colors: allColors,
-          sizes: allSizes,
-          allImages,
-          allColors,
-          allSizes,
-          price: avgPrice,
-          avgPrice,
-          stockCount: totalStock,
-          totalStock,
-        };
         const cleanedCreatePayload =
-          (cleanPayloadValue(createPayload) as Record<string, unknown>) ?? {};
+          (cleanPayloadValue(basePayload) as Record<string, unknown>) ?? {};
         const finalCreatePayload = omitPayloadKeys(cleanedCreatePayload);
-        console.log('createPayload: ', finalCreatePayload);
+        console.log("createPayload: ", finalCreatePayload);
         createMutation.mutate(finalCreatePayload);
       }
     },
@@ -1576,6 +1589,8 @@ const AddEditProductPage = () => {
       productName: product.name ?? "",
       brand: product.brand ?? "",
       category: product.category ?? "",
+      isPreOrder: product.isPreOrder ?? false,
+      isFeatured: product.isFeatured ?? false,
       pattern: product.pattern ?? "",
       sleeveType: product.sleeveType ?? "",
       fabric: product.fabric ?? "",
@@ -1587,6 +1602,8 @@ const AddEditProductPage = () => {
     setVariants(transformedVariants);
     form.setFieldValue("productName", formValues.productName);
     form.setFieldValue("brand", formValues.brand);
+    form.setFieldValue("isPreOrder", formValues.isPreOrder);
+    form.setFieldValue("isFeatured", formValues.isFeatured);
     form.setFieldValue("pattern", formValues.pattern);
     form.setFieldValue("sleeveType", formValues.sleeveType);
     form.setFieldValue("fabric", formValues.fabric);

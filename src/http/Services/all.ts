@@ -46,7 +46,7 @@ export const getProductById = async (id: string) => api.get(`products/${id}`);
  *
  * @returns {Promise<any>} - Returns the API response promise.
  */
-export const updateProduct = async (id: string, payload: any) => api.put(`products/${id}`, payload);
+export const updateProduct = async (id: string, payload: any) => api.put(`products/update-product/${id}`, payload);
 
 
 /**
