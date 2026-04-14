@@ -88,6 +88,44 @@ const isLehengaFamilyCategory = (category: string) =>
     category as (typeof LEHENGA_FAMILY_CATEGORIES)[number],
   );
 
+const cleanPayloadValue = (value: unknown): unknown => {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => cleanPayloadValue(item))
+      .filter((item) => item !== undefined);
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .map(([key, nestedValue]) => [key, cleanPayloadValue(nestedValue)] as const)
+      .filter(([, nestedValue]) => nestedValue !== undefined);
+    return Object.fromEntries(entries);
+  }
+
+  return value;
+};
+
+const OMITTED_PAYLOAD_KEYS = new Set([
+  "allColors",
+  "allImages",
+  "allSizes",
+  "avgPrice",
+  "colors",
+  "images",
+  "stockCount",
+  "totalStock",
+  "sizes",
+]);
+
+const omitPayloadKeys = (payload: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(payload).filter(([key]) => !OMITTED_PAYLOAD_KEYS.has(key)),
+  );
+
 // Image validation constants
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"] as const;
@@ -444,20 +482,22 @@ const VariantCard = memo(
             />
           </div>
 
-          <div className="space-y-1">
-            <FieldLabel className="text-xs">
-              Stock <span className="text-red-500">*</span>
-            </FieldLabel>
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="0"
-              value={getBulkStockValue()}
-              onChange={(e) => handleBulkStockChange(e.target.value)}
-              className="h-8 text-sm"
-            />
-          </div>
+          {!lehengaFlow && (
+            <div className="space-y-1">
+              <FieldLabel className="text-xs">
+                Stock <span className="text-red-500">*</span>
+              </FieldLabel>
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="0"
+                value={getBulkStockValue()}
+                onChange={(e) => handleBulkStockChange(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+          )}
         </div>
 
         {priceError && (
@@ -1224,8 +1264,11 @@ const AddEditProductPage = () => {
           totalStock,
           isActive: true,
         };
-        console.log('updatePayload: ', updatePayload);
-        updateMutation.mutate({ id, payload: updatePayload });
+        const cleanedUpdatePayload =
+          (cleanPayloadValue(updatePayload) as Record<string, unknown>) ?? {};
+        const finalUpdatePayload = omitPayloadKeys(cleanedUpdatePayload);
+        console.log('updatePayload: ', finalUpdatePayload);
+        updateMutation.mutate({ id, payload: finalUpdatePayload });
       } else {
         const createPayload = {
           productName: value.productName,
@@ -1248,8 +1291,11 @@ const AddEditProductPage = () => {
           stockCount: totalStock,
           totalStock,
         };
-        console.log('createPayload: ', createPayload);
-        createMutation.mutate(createPayload);
+        const cleanedCreatePayload =
+          (cleanPayloadValue(createPayload) as Record<string, unknown>) ?? {};
+        const finalCreatePayload = omitPayloadKeys(cleanedCreatePayload);
+        console.log('createPayload: ', finalCreatePayload);
+        createMutation.mutate(finalCreatePayload);
       }
     },
   });

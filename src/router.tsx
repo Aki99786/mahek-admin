@@ -57,7 +57,6 @@ const OrderDetailPage = lazy(
   () => import("./modules/orders/pages/OrderDetailPage"),
 );
 
-const CartPage = lazy(() => import("../app/cart/page"));
 const CheckoutAddressPage = lazy(
   () => import("./features/checkout/address/CheckoutAddressPage"),
 );
@@ -136,7 +135,6 @@ export const router = createBrowserRouter([
       },
 
       // Cart & checkout (customer-style flow in admin shell)
-      { path: "cart", element: withSuspense(CartPage) },
       { path: "checkout/address", element: withSuspense(CheckoutAddressPage) },
     ],
   },
