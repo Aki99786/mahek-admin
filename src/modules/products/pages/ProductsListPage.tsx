@@ -185,7 +185,8 @@ const ProductListPage = () => {
               // Get first variant data
               const firstVariant = product.variants?.[0];
               const hasMultipleVariants = product.variants?.length > 1;
-              const variantImage = firstVariant?.images?.[0] || product?.allImages?.[0] || "https://via.placeholder.com/400";
+              const variantImage = "https://res.cloudinary.com/dhgylinef/image/upload/v1776250194/b5drchfcsuhqcmmr6wed.png";
+              // const variantImage = firstVariant?.images?.[0] || product?.allImages?.[0] || "https://res.cloudinary.com/dhgylinef/image/upload/v1776250194/b5drchfcsuhqcmmr6wed.png";
               const sellingPrice = firstVariant?.sellingPrice || product.price || 0;
               const mrp = firstVariant?.mrp || product.price || 0;
               const hasDiscount = mrp > sellingPrice;
@@ -203,7 +204,7 @@ const ProductListPage = () => {
                         alt={product.name}
                         className="max-w-full max-h-full object-contain"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://via.placeholder.com/400?text=No+Image";
+                          (e.target as HTMLImageElement).src = "https://res.cloudinary.com/dhgylinef/image/upload/v1776250194/b5drchfcsuhqcmmr6wed.png";
                         }}
                       />
                     </div>

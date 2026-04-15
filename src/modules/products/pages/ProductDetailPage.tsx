@@ -104,7 +104,7 @@ const ImageSlider = memo(({ images }: { images: string[] }) => {
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src =
-                        "https://via.placeholder.com/400x600?text=Invalid+Image";
+                        "https://res.cloudinary.com/dhgylinef/image/upload/v1776250194/b5drchfcsuhqcmmr6wed.png";
                     }}
                   />
                 </div>
@@ -511,77 +511,8 @@ const ProductDetailPage = () => {
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-3 pt-2 mb-4">
-                <Button className="flex-1 h-12 bg-pink-600 hover:bg-pink-700 text-white font-semibold text-base">
-                  <ShoppingBag className="w-5 h-5 mr-2" />
-                  ADD TO BAG
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-12 px-5 border-2 border-gray-300 hover:border-gray-400"
-                >
-                  <Heart className="w-5 h-5 text-gray-700" />
-                </Button>
-              </div>
 
               {/* Delivery Information */}
-              <div className="border border-gray-200 rounded-lg p-4 space-y-2 mb-4">
-                <h4 className="text-sm font-semibold text-gray-700">DELIVERY OPTIONS</h4>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                    <svg
-                      className="w-3 h-3 text-green-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-sm text-gray-600">Free Delivery on orders above ₹499</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                    <svg
-                      className="w-3 h-3 text-blue-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-sm text-gray-600">Only 7 day return window</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center">
-                    <svg
-                      className="w-3 h-3 text-orange-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-sm text-gray-600">Cash on Delivery available</span>
-                </div>
-              </div>
 
               {/* Product Details */}
               <div className="border-t border-gray-200 pt-4 space-y-2 mb-4">

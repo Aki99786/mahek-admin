@@ -37,6 +37,10 @@ interface ApiOrder {
     email?: string;
     name?: string;
   };
+  shippingAddress?: {
+    fullName?: string;
+    phone?: string;
+  };  
   createdAt?: string;
   items?: unknown[];
   totalAmount?: number;
@@ -309,10 +313,13 @@ const OrdersListPage = () => {
                       <TableCell>
                         <div>
                           <div className="font-semibold text-gray-900">
-                            {order.user?.name?.trim() || "N/A"}
+                            {order?.shippingAddress?.fullName?.trim() || "Pankaj"}
                           </div>
                           <div className="text-sm text-gray-500">
                             {order.user?.email || "N/A"}
+                          </div>
+                          <div className="font-semibold text-gray-900">
+                            {order?.shippingAddress?.phone || "Pankaj"}
                           </div>
                         </div>
                       </TableCell>
