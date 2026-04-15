@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, memo } from "react";
+import { useEffect, useRef, useState, useMemo, memo, lazy, Suspense } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
@@ -29,21 +29,10 @@ import {
 import { showError, showSuccess } from "@/utility/utility";
 import { uploadImageToCloudinary } from "@/lib/cloudinary";
 import ProductPreview from "./ProductPreview";
-import { CKEditor } from "@ckeditor/ckeditor5-react";
-import {
-  ClassicEditor,
-  Bold,
-  Essentials,
-  Italic,
-  Paragraph,
-  Undo,
-  Link,
-  List,
-  Underline,
-  Font
-} from "ckeditor5";
-import "ckeditor5/ckeditor5.css";
-// import Font from '@ckeditor/ckeditor5-font/src/font';
+
+const ProductDescriptionEditor = lazy(
+  () => import("@/components/editor/ProductDescriptionEditor"),
+);
 
 // Available sizes for selection
 const AVAILABLE_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
@@ -274,9 +263,10 @@ const normalizeSizes = (
   category: string,
 ): Record<string, { selected: boolean; stock: string }> => {
   const isSareeFlow = isSareeCategory(category);
-  const fallback = isSareeFlow
-    ? { ONE_SIZE: { selected: true, stock: "" } }
-    : {};
+  const fallback: Record<string, { selected: boolean; stock: string }> =
+    isSareeFlow
+      ? { ONE_SIZE: { selected: true, stock: "" } }
+      : {};
 
   if (Array.isArray(rawSizes)) {
     const parsed = rawSizes.reduce(
@@ -1304,20 +1294,6 @@ const AddEditProductPage = () => {
 
       // Prepare payload
       const allImages = variants.flatMap((v) => v.images);
-      const allColors = variants.map((v) => v.color);
-      
-      // For Saree category, use "ONE SIZE", otherwise collect selected sizes
-      const allSizes = isSareeFlow
-        ? ["ONE SIZE"]
-        : Array.from(
-            new Set(
-              variants.flatMap((v) =>
-                Object.entries(v.sizes)
-                  .filter(([, data]) => data.selected)
-                  .map(([size]) => size),
-              ),
-            ),
-          );
 
       // Calculate average price
       const avgPrice =
@@ -1325,16 +1301,6 @@ const AddEditProductPage = () => {
           (sum, v) => sum + parseFloat(v.sellingPrice || "0"),
           0,
         ) / variants.length;
-
-      // Calculate total stock
-      const totalStock = variants.reduce((sum, v) => {
-        return (
-          sum +
-          Object.entries(v.sizes)
-          .filter(([, data]) => data.selected)
-          .reduce((vSum, [, data]) => vSum + (parseInt(data.stock) || 0), 0)
-        );
-      }, 0);
       
       const isFeatured =
         typeof value.isFeatured === "boolean"
@@ -1811,21 +1777,21 @@ const AddEditProductPage = () => {
                           Description <span className="text-red-500">*</span>
                         </FieldLabel>
                         <div className={cn("border rounded-lg overflow-hidden min-h-[180px]", descriptionError ? "border-red-500" : "border-gray-300")}>
-                          <CKEditor
-                            editor={ClassicEditor}
-                            config={{
-                              licenseKey: "GPL",
-                              plugins: [Essentials, Bold, Italic, Paragraph, Link, List, Undo, Underline, Font],
-                              toolbar: ["undo", "redo", "|", "bold", "italic", "underline", "|", "bulletedList", "numberedList", "|", "link", "fontColor", "fontBackgroundColor"],
-                              placeholder: "Enter product description...",
-                            }}
-                            data={description}
-                            onChange={(_event: unknown, editor: { getData: () => string }) => {
-                              const data = editor.getData();
-                              setDescription(data);
-                              if (data && data.trim()) setDescriptionError("");
-                            }}
-                          />
+                          <Suspense
+                            fallback={
+                              <div className="min-h-[180px] flex items-center justify-center bg-white">
+                                <Spinner className="size-6" />
+                              </div>
+                            }
+                          >
+                            <ProductDescriptionEditor
+                              value={description}
+                              onChange={(next) => {
+                                setDescription(next);
+                                if (next && next.trim()) setDescriptionError("");
+                              }}
+                            />
+                          </Suspense>
                         </div>
                         {descriptionError && <p className="text-xs text-red-500">{descriptionError}</p>}
                       </div>
