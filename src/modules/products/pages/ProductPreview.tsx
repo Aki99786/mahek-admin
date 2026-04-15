@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Heart, ShoppingBag, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShoppingBag, Star } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface ProductVariant {
