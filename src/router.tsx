@@ -57,6 +57,13 @@ const OrderDetailPage = lazy(
   () => import("./modules/orders/pages/OrderDetailPage"),
 );
 
+
+// Team
+const TeamLayout = lazy(() => import("./modules/team/layouts/TeamLayout"));
+const TeamListPage = lazy(() => import("./modules/team/pages/TeamListPage"));
+const AddEditTeamMember = lazy(() => import("./modules/team/pages/AddEditTeamMember"));
+
+
 // ===== Reusable Suspense Wrapper =====
 const withSuspense = (Component: any) => (
   <Suspense fallback={<LoadingSpinner />}>
@@ -95,14 +102,6 @@ export const router = createBrowserRouter([
             element: withSuspense(AddEditProductPage),
           },
           { path: "detail/:id", element: withSuspense(ProductDetailPage) },
-
-
-          // { path: "new-add-product", element: withSuspense(NewAddEditProductPage) },
-          // {
-          //   path: "new-edit-product/:id",
-          //   element: withSuspense(NewAddEditProductPage),
-          // },
-          // { path: "new-detail/:id", element: withSuspense(NewProductDetailPage) },
         ],
       },
 
@@ -129,6 +128,16 @@ export const router = createBrowserRouter([
           { path: "detail/:id", element: withSuspense(OrderDetailPage) },
         ],
       },
+
+      // Team
+      {
+        path: "team", element: withSuspense(TeamLayout),
+        children: [
+           { index: true, element: withSuspense(TeamListPage) },
+           { path: "add-member", element: withSuspense(AddEditTeamMember) },
+           { path: "edit-member/:id", element: withSuspense(AddEditTeamMember) },
+        ]
+      }
     ],
   },
 ]);

@@ -16,7 +16,6 @@ export const getProductsList = async (queryString = '') => api.get(`products/${q
  */
 export const createProduct = async (payload: any) => api.post(`products/add-product`, payload);
 
-
 /**
  * Delete a product based on their unique ID.
  * This function sends a DELETE request to remove
@@ -26,8 +25,7 @@ export const createProduct = async (payload: any) => api.post(`products/add-prod
  *
  * @returns {Promise<any>} - Returns the API response promise.
  */
-export const deleteProductBasedOnId = async (id: string) => api.delete(`candidates/admin/products/${id}/delete/`);
-
+export const deleteProduct = async (id: string) => api.delete(`products/delete/${id}`);
 
 /**
  * Get a product by ID.
@@ -46,18 +44,7 @@ export const getProductById = async (id: string) => api.get(`products/${id}`);
  *
  * @returns {Promise<any>} - Returns the API response promise.
  */
-export const updateProduct = async (id: string, payload: any) => api.put(`products/${id}`, payload);
-
-
-/**
- * Sends a DELETE request to the server to remove a product by its ID.
- *
- * @param id - The unique identifier of the product to be deleted.
- * @returns A promise that resolves with the API response after successful deletion.
- */
-export const deleteProduct = async (id: string) => api.delete(`products/delete/${id}`);
-
-
+export const updateProduct = async (id: string, payload: any) => api.put(`products/update-product/${id}`, payload);
 
 // Users APIs Start
 
@@ -77,7 +64,6 @@ export const getUsersList = async (queryString = '') => api.get(`admin/users/${q
  */
 export const getUserById = async (id: string) => api.get(`admin/users/${id}`);
 
-
 // Get DashBoard Data Start
 /**
  * Fetches a Dashboard pages using the provided query string.
@@ -96,15 +82,6 @@ export const getDashBoardData = async (queryString = '') => api.get(`admin/dashb
 export const getOrdersList = async (queryString = '') => api.get(`admin/orders/${queryString}`);
 
 /**
- * Get an order by ID.
- *
- * @param {string} id - Unique ID of the order.
- *
- * @returns {Promise<any>} - Returns the API response promise.
- */
-export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
-
-/**
  * Update order status.
  *
  * @param {string} id - Unique ID of the order.
@@ -114,3 +91,10 @@ export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
  */
 export const updateOrderStatus = async (id: string, status: string) => api.patch(`orders/${id}/status`, { orderStatus: status });
 
+// Fetches the list of orders from the admin API.
+// Accepts an optional query string for filters, pagination, or sorting.
+export const getOrderList = async (queryString = '') => api.get(`admin/orders/${queryString}`);
+
+// Fetches a single order by its unique ID from the admin API.
+// Used to get detailed information of a specific order.
+export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);

@@ -24,6 +24,7 @@ const LoginPage = () => {
     onSuccess: (data: any) => {
       const userData = data?.data?.admin;
       const token = data?.headers?.authorization;
+      console.log('token: ', token);
       setToken(token);
       setUserDetails(userData);
       showSuccess('Welcome to dashboard');

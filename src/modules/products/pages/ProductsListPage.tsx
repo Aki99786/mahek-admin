@@ -197,7 +197,7 @@ const ProductListPage = () => {
                 >
                   {/* Product Image with Badges */}
                   <div className="relative h-56 overflow-hidden bg-white border-b">
-                    <div className="w-full h-full flex items-center justify-center p-3">
+                    <div className="w-full flex items-center justify-center">
                       <img
                         src={variantImage}
                         alt={product.name}

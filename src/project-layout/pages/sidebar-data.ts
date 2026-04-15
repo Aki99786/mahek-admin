@@ -1,4 +1,10 @@
-import { LayoutDashboard, Package, ShoppingCart, Users, type LucideIcon } from "lucide-react";
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 
 export interface SidebarNavItem {
@@ -32,13 +38,18 @@ export const sidebarData: SidebarNavItem[] = [
     icon: Users,
     isActive: true,
   },
-   {
+  {
     title: "Orders",
     url: "/orders",
     icon: ShoppingCart,
     isActive: true,
   },
-
+  {
+    title: "Teams",
+    url: "/team",
+    icon: Users,
+    isActive: true,
+  }
 ];
 
 
