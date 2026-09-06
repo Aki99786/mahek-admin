@@ -1,8 +1,44 @@
-import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
 import { z } from "zod";
+import { CKEditor } from "@ckeditor/ckeditor5-react";
+import {
+  Alignment,
+  AutoImage,
+  BlockQuote,
+  Bold,
+  ClassicEditor,
+  Emoji,
+  Essentials,
+  Font,
+  GeneralHtmlSupport,
+  Heading,
+  HorizontalLine,
+  Image,
+  ImageCaption,
+  ImageInsert,
+  ImageResize,
+  ImageStyle,
+  ImageToolbar,
+  ImageUpload,
+  Italic,
+  Link,
+  LinkImage,
+  List,
+  Mention,
+  Paragraph,
+  PasteFromOffice,
+  PictureEditing,
+  RemoveFormat,
+  Strikethrough,
+  Style,
+  Underline,
+  Undo,
+  type EditorConfig,
+} from "ckeditor5";
+import "ckeditor5/ckeditor5.css";
 import {
   Camera,
   ChevronDown,
@@ -39,10 +75,6 @@ import {
 import { showError, showSuccess } from "@/utility/utility";
 import { uploadImageToCloudinary } from "@/lib/cloudinary";
 import ProductPreview from "./ProductPreview";
-
-const ProductDescriptionEditor = lazy(
-  () => import("@/components/editor/ProductDescriptionEditor"),
-);
 
 type CategorySlug =
   | "lehenga"
@@ -237,8 +269,212 @@ const sanitizeDecimal = (raw: string): string => {
   return `${whole}.${rest.join("")}`;
 };
 
-const isEmptyHtml = (html: string): boolean =>
-  html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length === 0;
+const isEmptyHtml = (html: string): boolean => {
+  if (!html.trim()) return true;
+  if (/<img\b/i.test(html)) return false;
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length === 0;
+};
+
+type UploadLoader = { file: Promise<File> };
+
+function CloudinaryUploadAdapterPlugin(editor: {
+  plugins: {
+    get: (name: "FileRepository") => {
+      createUploadAdapter: (loader: UploadLoader) => {
+        upload: () => Promise<{ default: string }>;
+        abort: () => void;
+      };
+    };
+  };
+}) {
+  editor.plugins.get("FileRepository").createUploadAdapter = (loader) => ({
+    upload: async () => {
+      const file = await loader.file;
+      const data = await uploadImageToCloudinary(file);
+      return { default: data.secure_url };
+    },
+    abort: () => undefined,
+  });
+}
+
+type ProductEditorInstance = {
+  getData: () => string;
+  setData: (data: string) => void;
+};
+
+const PRODUCT_EDITOR_CONFIG = {
+  licenseKey: "GPL",
+  extraPlugins: [CloudinaryUploadAdapterPlugin],
+  plugins: [
+    Essentials,
+    Paragraph,
+    Heading,
+    Bold,
+    Italic,
+    Underline,
+    Strikethrough,
+    Alignment,
+    Font,
+    Link,
+    List,
+    BlockQuote,
+    HorizontalLine,
+    Undo,
+    RemoveFormat,
+    PasteFromOffice,
+    Image,
+    ImageToolbar,
+    ImageCaption,
+    ImageStyle,
+    ImageResize,
+    ImageUpload,
+    ImageInsert,
+    AutoImage,
+    PictureEditing,
+    LinkImage,
+    Emoji,
+    Mention,
+    Style,
+    GeneralHtmlSupport,
+  ],
+  toolbar: {
+    items: [
+      "undo",
+      "redo",
+      "|",
+      "heading",
+      "alignment",
+      "|",
+      "bold",
+      "italic",
+      "underline",
+      "strikethrough",
+      "removeFormat",
+      "|",
+      "fontColor",
+      "fontBackgroundColor",
+      "style",
+      "|",
+      "bulletedList",
+      "numberedList",
+      "blockQuote",
+      "horizontalLine",
+      "|",
+      "link",
+      "insertImage",
+      "emoji",
+    ],
+    shouldNotGroupWhenFull: false,
+  },
+  heading: {
+    options: [
+      { model: "paragraph" as const, title: "Paragraph", class: "ck-heading_paragraph" },
+      { model: "heading2" as const, view: "h2", title: "Heading", class: "ck-heading_heading2" },
+      { model: "heading3" as const, view: "h3", title: "Subheading", class: "ck-heading_heading3" },
+    ],
+  },
+  image: {
+    toolbar: [
+      "imageStyle:inline",
+      "imageStyle:block",
+      "imageStyle:side",
+      "|",
+      "toggleImageCaption",
+      "imageTextAlternative",
+      "|",
+      "linkImage",
+    ],
+  },
+  link: {
+    addTargetToExternalLinks: true,
+    defaultProtocol: "https://",
+  },
+  style: {
+    definitions: [
+      { name: "Best Seller", element: "span", classes: ["pd-badge", "pd-badge-best"] },
+      { name: "New Arrival", element: "span", classes: ["pd-badge", "pd-badge-new"] },
+      { name: "20% OFF", element: "span", classes: ["pd-badge", "pd-badge-off"] },
+      { name: "Limited Offer", element: "span", classes: ["pd-badge", "pd-badge-limited"] },
+      { name: "Premium", element: "span", classes: ["pd-badge", "pd-badge-premium"] },
+      { name: "Trending", element: "span", classes: ["pd-badge", "pd-badge-trending"] },
+    ],
+  },
+  htmlSupport: {
+    allow: [{ name: "span", classes: true, styles: true }],
+  },
+  placeholder: "Describe product...",
+} as EditorConfig;
+
+const ProductRichTextEditor = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (nextValue: string) => void;
+}) => {
+  const editorRef = useRef<ProductEditorInstance | null>(null);
+  const lastEmittedRef = useRef(value);
+  const initialDataRef = useRef(value);
+
+  useEffect(() => {
+    if (value === lastEmittedRef.current) return;
+    lastEmittedRef.current = value;
+    editorRef.current?.setData(value || "");
+  }, [value]);
+
+  return (
+    <div className="product-rich-text-editor">
+      <style>{`
+      .product-rich-text-editor .ck.ck-editor__main > .ck-editor__editable {
+        min-height: 280px;
+        max-height: 420px;
+        overflow-y: auto;
+      }
+      .product-rich-text-editor .ck.ck-toolbar {
+        border: 0;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f8fafc;
+      }
+      .product-rich-text-editor .ck.ck-editor__main > .ck-editor__editable:not(.ck-focused) {
+        border: 0;
+        box-shadow: none;
+      }
+      .product-rich-text-editor .ck.ck-editor__main > .ck-editor__editable.ck-focused {
+        border: 0;
+        box-shadow: none;
+      }
+      .product-rich-text-editor .pd-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.4;
+        letter-spacing: 0.02em;
+      }
+      .product-rich-text-editor .pd-badge-best { background: #FFF3D6; color: #92400E; }
+      .product-rich-text-editor .pd-badge-new { background: #DBEAFE; color: #1D4ED8; }
+      .product-rich-text-editor .pd-badge-off { background: #FCE7F3; color: #BE185D; }
+      .product-rich-text-editor .pd-badge-limited { background: #FEE2E2; color: #B91C1C; }
+      .product-rich-text-editor .pd-badge-premium { background: #EDE9FE; color: #6D28D9; }
+      .product-rich-text-editor .pd-badge-trending { background: #DCFCE7; color: #15803D; }
+    `}</style>
+      <CKEditor
+        editor={ClassicEditor}
+        config={PRODUCT_EDITOR_CONFIG}
+        data={initialDataRef.current}
+        onReady={(editor: ProductEditorInstance) => {
+          editorRef.current = editor;
+        }}
+        onChange={(_event: unknown, editor: ProductEditorInstance) => {
+          const html = editor.getData();
+          lastEmittedRef.current = html;
+          onChange(html);
+        }}
+      />
+    </div>
+  );
+};
 
 const isSareeCategory = (category: string): boolean =>
   category === "saree" || category === "banarasi-saree";
@@ -1548,18 +1784,10 @@ const NewAddUpdateProduct = () => {
                       : "border-gray-300",
                   )}
                 >
-                  <Suspense
-                    fallback={
-                      <div className="flex min-h-[180px] items-center justify-center">
-                        <Spinner className="size-6" />
-                      </div>
-                    }
-                  >
-                    <ProductDescriptionEditor
-                      value={description}
-                      onChange={setDescription}
-                    />
-                  </Suspense>
+                  <ProductRichTextEditor
+                    value={description}
+                    onChange={setDescription}
+                  />
                 </div>
                 <FieldError
                   message={

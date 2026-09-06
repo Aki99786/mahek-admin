@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ckeditor/ckeditor5-font": "^47.5.0",
+    "@ckeditor/ckeditor5-font": "47.6.2",
     "@ckeditor/ckeditor5-react": "^11.0.1",
     "@cloudinary/react": "^1.14.3",
     "@cloudinary/url-gen": "^1.22.0",
@@ -39,7 +39,7 @@
     "@tiptap/react": "^3.14.0",
     "@tiptap/starter-kit": "^3.14.0",
     "axios": "^1.13.2",
-    "ckeditor5": "^47.5.0",
+    "ckeditor5": "47.6.2",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
@@ -82,6 +82,10 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.50.1",
     "vite": "^7.3.0"
+  },
+  "overrides": {
+    "ckeditor5": "47.6.2",
+    "@ckeditor/ckeditor5-font": "47.6.2"
   },
   "allowScripts": {
     "@swc/core@1.16.2": true,
