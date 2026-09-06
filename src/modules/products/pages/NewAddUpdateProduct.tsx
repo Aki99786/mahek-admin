@@ -720,7 +720,7 @@ const toApiPayload = ({
       size: row.size,
       quantity: Number(row.quantity),
       selling_price: Number(row.selling_price),
-      mrp: Number(row.mrp),
+      mrp: row.mrp === "" ? 0 : Number(row.mrp),
     })),
   })),
 });
@@ -1022,7 +1022,10 @@ const VariantCard = memo(function VariantCard({
               showErrors && row.quantity === "" ? "Quantity is required" : "";
             const sellingEmpty =
               showErrors && row.selling_price === "" ? "Selling price is required" : "";
-            const mrpError = showErrors && row.mrp === "" ? "MRP is required" : "";
+            const mrpError =
+              showErrors && row.mrp !== "" && Number(row.mrp) < 0
+                ? "MRP cannot be negative"
+                : "";
             const priceError = sellingExceedsMrp(row.selling_price, row.mrp)
               ? "Price > MRP"
               : sellingEmpty;
@@ -1304,9 +1307,9 @@ const NewAddUpdateProduct = () => {
             );
             return;
           }
-          if (row.mrp === "" || Number(row.mrp) < 0) {
+          if (row.mrp !== "" && Number(row.mrp) < 0) {
             showError(
-              `Variant "${variant.color}" size ${row.size} must have a valid MRP`,
+              `Variant "${variant.color}" size ${row.size} has an invalid MRP`,
             );
             return;
           }
