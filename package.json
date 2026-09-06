@@ -29,26 +29,23 @@
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@tailwindcss/cli": "^4.1.18",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-form": "^1.27.7",
     "@tanstack/react-query": "^5.90.14",
     "@tanstack/react-table": "^8.21.3",
-    "@tanstack/zod-form-adapter": "^0.42.1",
     "@tiptap/extension-image": "^3.14.0",
     "@tiptap/extension-link": "^3.14.0",
     "@tiptap/extension-underline": "^3.14.0",
     "@tiptap/react": "^3.14.0",
     "@tiptap/starter-kit": "^3.14.0",
     "axios": "^1.13.2",
-    "ckeditor5": "^47.4.0",
+    "ckeditor5": "^47.5.0",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
-    "geist": "^1.5.1",
     "lexical": "^0.38.2",
     "lucide-react": "^0.554.0",
     "process": "^0.11.10",
@@ -63,13 +60,8 @@
     "zod": "^3.25.76",
     "zustand": "^5.0.9"
   },
-  "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "4.54.0",
-    "lightningcss-linux-x64-gnu": "1.30.2"
-  },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@types/axios": "^0.9.36",
     "@types/node": "^24.10.4",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
@@ -90,5 +82,9 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.50.1",
     "vite": "^7.3.0"
+  },
+  "allowScripts": {
+    "@swc/core@1.16.2": true,
+    "esbuild@0.28.2": true
   }
 }
