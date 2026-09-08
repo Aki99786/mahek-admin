@@ -19,6 +19,52 @@ import { confirmationStore } from "@/store/store";
 import { ModalType } from "@/shared-component/Confirmation";
 import { showSuccess, showError } from "@/utility/utility";
 
+interface ProductSize {
+  size: string;
+  quantity: number;
+  selling_price: number;
+  mrp: number;
+  _id: string;
+  is_cart_active: boolean;
+  is_wishlist: boolean;
+}
+
+interface ProductVariant {
+  _id: string;
+  product_id: string;
+  color: string;
+  sizes: ProductSize[];
+  images: string[];
+  sku: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface Product {
+  _id: string;
+  category: string;
+  brand: string;
+  product_name: string;
+  fabric: string;
+  description: string;
+  is_sale: boolean;
+  is_visible: boolean;
+  status: string;
+  is_delete: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  variant?: ProductVariant | null;
+}
+
+const FALLBACK_IMAGE = "https://via.placeholder.com/400";
+
+const getDisplaySize = (sizes: ProductSize[]): ProductSize | undefined => {
+  if (sizes.length === 0) return undefined;
+  return sizes.reduce((lowest, size) =>
+    Number(size.selling_price) < Number(lowest.selling_price) ? size : lowest,
+  );
+};
+
 const ProductListPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -95,7 +141,7 @@ const ProductListPage = () => {
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
-  const products = data?.data?.products || [];
+  const products: Product[] = data?.data?.products || [];
   const totalCount = data?.data?.total || 0;
 
   return (
@@ -181,18 +227,23 @@ const ProductListPage = () => {
       {!isLoading && !isError && products.length > 0 && (
         <>
           <div className="grid grid-cols-5 gap-4">
-            {products.map((product: any) => {
-              // Get first variant data
-              const firstVariant = product.variants?.[0];
-              const hasMultipleVariants = product.variants?.length > 1;
-              const variantImage = firstVariant?.images?.[0] || product?.allImages?.[0] || "https://via.placeholder.com/400";
-              const sellingPrice = firstVariant?.sellingPrice || product.price || 0;
-              const mrp = firstVariant?.mrp || product.price || 0;
-              const hasDiscount = mrp > sellingPrice;
+            {products.map((product) => {
+              const variant = product.variant;
+              const sizes = variant?.sizes ?? [];
+              const displaySize = getDisplaySize(sizes);
+              const hasMultipleVariants = false;
+              const variantImage = variant?.images?.[0] || FALLBACK_IMAGE;
+              const sellingPrice = Number(displaySize?.selling_price) || 0;
+              const mrp = Number(displaySize?.mrp) || 0;
+              const hasDiscount = mrp > 0 && sellingPrice >= 0 && mrp > sellingPrice;
+              const totalStock = sizes.reduce(
+                (sum, size) => sum + (Number(size.quantity) || 0),
+                0,
+              );
 
               return (
                 <Card
-                  key={product.id}
+                  key={product._id}
                   className="overflow-hidden hover:shadow-lg transition-shadow"
                 >
                   {/* Product Image with Badges */}
@@ -200,7 +251,7 @@ const ProductListPage = () => {
                     <div className="w-full flex items-center justify-center">
                       <img
                         src={variantImage}
-                        alt={product.name}
+                        alt={product.product_name}
                         className="max-w-full max-h-full object-contain"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = "https://via.placeholder.com/400?text=No+Image";
@@ -208,12 +259,12 @@ const ProductListPage = () => {
                       />
                     </div>
                     {/* Stock Badges */}
-                    {product.totalStock === 0 && (
+                    {totalStock === 0 && (
                       <Badge className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1">
                         SOLD OUT
                       </Badge>
                     )}
-                    {product.totalStock > 0 && product.totalStock < 10 && (
+                    {totalStock > 0 && totalStock < 10 && (
                       <Badge className="absolute top-2 right-2 bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-1">
                         Low Stock
                       </Badge>
@@ -243,7 +294,7 @@ const ProductListPage = () => {
                     {/* Product Name */}
                     <div>
                       <h3 className="font-semibold text-gray-900 text-sm line-clamp-2 leading-tight">
-                        {product.name}
+                        {product.product_name}
                       </h3>
                     </div>
 
@@ -274,14 +325,14 @@ const ProductListPage = () => {
                         Stock: {" "}
                         <span
                           className={`font-medium ${
-                            product.totalStock === 0
+                            totalStock === 0
                               ? "text-red-600"
-                              : product.totalStock < 10
+                              : totalStock < 10
                                 ? "text-orange-600"
                                 : "text-green-600"
                           }`}
                         >
-                          {product.totalStock || 0}
+                          {totalStock}
                         </span>
                       </div>
                     </div>
@@ -314,7 +365,7 @@ const ProductListPage = () => {
                           disabled={deleteMutation.isPending}
                         >
                           {deleteMutation.isPending &&
-                          deleteMutation.variables === (product._id ?? product.id) ? (
+                          deleteMutation.variables === product._id ? (
                             <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
                           ) : (
                             <Trash2 className="w-3.5 h-3.5" />
