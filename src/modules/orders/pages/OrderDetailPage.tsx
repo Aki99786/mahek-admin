@@ -1,8 +1,9 @@
-import { ArrowLeft, Mail, Phone, MapPin, Package, Check } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, Mail, Phone, MapPin, Package, Check, RefreshCw, Download, XCircle, Truck } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { Card, CardContent } from "@/components/ui/card";
-import { getOrderById } from "@/http/Services/all";
+import { Button } from "@/components/ui/button";
+import { getOrderById, trackOrder, retryShipment, downloadShipmentLabel, cancelShipment } from "@/http/Services/all";
 
 interface OrderItem {
   _id: string;
@@ -28,18 +29,39 @@ interface OrderDetailApi {
   items?: OrderItem[];
   totalAmount?: number;
   orderStatus?: string;
+  paymentStatus?: string;
+  // Shiprocket fields
+  shiprocketOrderId?: string | null;
+  shiprocketShipmentId?: string | null;
+  awbCode?: string | null;
+  courierName?: string | null;
 }
 
-const STATIC_TRACKING_STEPS = [
-  { id: "1", status: "Order Placed", timestamp: "2026-01-28 10:30 AM" },
-  { id: "2", status: "Processing", timestamp: "2026-01-28 02:15 PM" },
-  { id: "3", status: "Shipped", timestamp: "2026-01-29 09:00 AM" },
-  { id: "4", status: "In Transit", timestamp: "2026-01-30 08:30 AM" },
-  { id: "5", status: "Delivered", timestamp: "2026-02-01 03:45 PM" },
-];
+interface TrackingActivity {
+  date?: string;
+  activity?: string;
+  location?: string;
+}
+
+interface TrackingResponse {
+  orderId?: string;
+  orderStatus?: string;
+  awbCode?: string | null;
+  courierName?: string | null;
+  shiprocketOrderId?: string | null;
+  shiprocketShipmentId?: string | null;
+  trackingData?: {
+    current_status?: string;
+    etd?: string;
+    shipment_track?: TrackingActivity[];
+    shipment_track_activities?: TrackingActivity[];
+  } | null;
+  message?: string;
+}
 
 const OrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const { data: order, isLoading, isError } = useQuery<OrderDetailApi>({
     queryKey: ["order-detail", id],
@@ -54,6 +76,52 @@ const OrderDetailPage = () => {
     enabled: Boolean(id),
     staleTime: 1000 * 60 * 5,
   });
+
+  // Live tracking query — fetches Shiprocket data
+  const { data: tracking, isLoading: isTrackingLoading, refetch: refetchTracking } =
+    useQuery<TrackingResponse>({
+      queryKey: ["order-tracking", id],
+      queryFn: async () => {
+        const res = await trackOrder(id!);
+        return (res as { data?: TrackingResponse }).data ?? (res as unknown as TrackingResponse);
+      },
+      enabled: Boolean(id),
+      staleTime: 1000 * 60 * 2, // refresh every 2 min
+    });
+
+  // Mutation: Retry Shiprocket shipment
+  const retryMutation = useMutation({
+    mutationFn: () => retryShipment(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["order-tracking", id] });
+    },
+  });
+
+  // Mutation: Cancel shipment
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelShipment(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
+    },
+  });
+
+  // Label download handler
+  const handleDownloadLabel = async () => {
+    try {
+      const res = await downloadShipmentLabel(id!);
+      const labelUrl =
+        (res as { data?: { labelUrl?: string } }).data?.labelUrl ??
+        (res as { labelUrl?: string }).labelUrl;
+      if (labelUrl) {
+        window.open(labelUrl, "_blank");
+      } else {
+        alert("Label URL not available. Try again after Shiprocket processes the shipment.");
+      }
+    } catch {
+      alert("Failed to download label. Please try again.");
+    }
+  };
 
   const items = order?.items ?? [];
   const totalAmount = Number(order?.totalAmount ?? 0);
@@ -99,33 +167,99 @@ const OrderDetailPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Order Tracking & Items */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Static Order Tracking UI (display only) */}
+          {/* Live Order Tracking (Shiprocket) */}
           <Card className="bg-white">
             <CardContent className="p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-6">
-                Order Tracking
-              </h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-gray-900">Order Tracking</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchTracking()}
+                  className="text-xs text-gray-500 hover:text-gray-700 gap-1"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Refresh
+                </Button>
+              </div>
 
-              <div className="space-y-0">
-                {STATIC_TRACKING_STEPS.map((step, index) => (
-                  <div key={step.id} className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-green-500">
-                        <Check className="w-5 h-5 text-white" />
-                      </div>
-                      {index < STATIC_TRACKING_STEPS.length - 1 && (
-                        <div className="w-0.5 h-16 bg-gray-200 my-1" />
+              {isTrackingLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="animate-spin h-4 w-4 rounded-full border-2 border-purple-500 border-t-transparent" />
+                  Fetching live tracking...
+                </div>
+              )}
+
+              {!isTrackingLoading && tracking && (() => {
+                const activities: TrackingActivity[] =
+                  tracking.trackingData?.shipment_track_activities ??
+                  tracking.trackingData?.shipment_track ??
+                  [];
+
+                return (
+                  <div className="space-y-4">
+                    {/* Shipment info chips */}
+                    <div className="flex flex-wrap gap-2">
+                      {tracking.courierName && (
+                        <span className="flex items-center gap-1.5 text-xs bg-purple-50 text-purple-700 rounded-full px-3 py-1">
+                          <Truck className="w-3.5 h-3.5" />
+                          {tracking.courierName}
+                        </span>
+                      )}
+                      {tracking.awbCode && (
+                        <span className="text-xs bg-blue-50 text-blue-700 font-mono rounded-full px-3 py-1">
+                          AWB: {tracking.awbCode}
+                        </span>
+                      )}
+                      {tracking.trackingData?.etd && (
+                        <span className="text-xs bg-green-50 text-green-700 rounded-full px-3 py-1">
+                          ETA: {tracking.trackingData.etd}
+                        </span>
                       )}
                     </div>
 
-                    <div className="flex-1 pb-8">
-                      <h3 className="font-semibold text-gray-900">
-                        {step.status}
-                      </h3>
-                    </div>
+                    {!tracking.awbCode && (
+                      <p className="text-sm text-gray-400 italic">
+                        {tracking.message ?? "AWB not yet assigned. Use 'Retry Shipment' if needed."}
+                      </p>
+                    )}
+
+                    {/* Event timeline */}
+                    {activities.length > 0 ? (
+                      <div className="space-y-0">
+                        {activities.map((step, index) => (
+                          <div key={index} className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                index === 0 ? "bg-green-500" : "bg-gray-200"
+                              }`}>
+                                <Check className={`w-5 h-5 ${index === 0 ? "text-white" : "text-gray-400"}`} />
+                              </div>
+                              {index < activities.length - 1 && (
+                                <div className="w-0.5 h-16 bg-gray-200 my-1" />
+                              )}
+                            </div>
+                            <div className="flex-1 pb-8">
+                              <h3 className="font-semibold text-gray-900">{step.activity ?? "—"}</h3>
+                              {step.location && (
+                                <p className="text-xs text-gray-500 mt-0.5">📍 {step.location}</p>
+                              )}
+                              {step.date && (
+                                <p className="text-xs text-gray-400 mt-0.5">{step.date}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">
+                        No tracking events yet.
+                      </p>
+                    )}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
+
             </CardContent>
           </Card>
 
@@ -190,6 +324,111 @@ const OrderDetailPage = () => {
 
         {/* Right Column - Customer Info, Address, Invoice */}
         <div className="space-y-6">
+          {/* Shiprocket Info Card */}
+          <Card className="bg-white">
+            <CardContent className="p-6">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <Truck className="w-4 h-4 text-purple-500" />
+                Shiprocket Shipment
+              </h3>
+              <div className="space-y-3 text-xs">
+                <div>
+                  <p className="text-gray-400 mb-0.5">Shiprocket Order ID</p>
+                  <p className="font-mono font-medium text-gray-800">
+                    {order.shiprocketOrderId ?? <span className="italic text-gray-400">Not created</span>}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 mb-0.5">Shipment ID</p>
+                  <p className="font-mono font-medium text-gray-800">
+                    {order.shiprocketShipmentId ?? <span className="italic text-gray-400">—</span>}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 mb-0.5">AWB Number</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono font-semibold text-blue-700">
+                      {order.awbCode ?? <span className="italic text-gray-400 font-normal">Not assigned</span>}
+                    </p>
+                    {order.awbCode && (
+                      <button
+                        onClick={() => navigator.clipboard.writeText(order.awbCode ?? "")}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        title="Copy AWB"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-gray-400 mb-0.5">Courier</p>
+                  <p className="font-medium text-gray-800">
+                    {order.courierName ?? <span className="italic text-gray-400">—</span>}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-5 space-y-2">
+                {/* Retry Shipment — only shown when AWB is missing */}
+                {!order.awbCode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2 text-orange-600 border-orange-200 hover:bg-orange-50"
+                    onClick={() => retryMutation.mutate()}
+                    disabled={retryMutation.isPending}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${retryMutation.isPending ? "animate-spin" : ""}`} />
+                    {retryMutation.isPending ? "Creating Shipment..." : "Retry Shipment"}
+                  </Button>
+                )}
+
+                {/* Download Label — only shown when AWB exists */}
+                {order.awbCode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+                    onClick={handleDownloadLabel}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download Label
+                  </Button>
+                )}
+
+                {/* Cancel Shipment */}
+                {order.orderStatus !== "DELIVERED" && order.orderStatus !== "CANCELLED" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => {
+                      if (confirm("Are you sure you want to cancel this shipment? This cannot be undone.")) {
+                        cancelMutation.mutate();
+                      }
+                    }}
+                    disabled={cancelMutation.isPending}
+                  >
+                    <XCircle className={`w-3.5 h-3.5 ${cancelMutation.isPending ? "animate-spin" : ""}`} />
+                    {cancelMutation.isPending ? "Cancelling..." : "Cancel Shipment"}
+                  </Button>
+                )}
+
+                {retryMutation.isError && (
+                  <p className="text-xs text-red-500">Retry failed. Check Shiprocket credentials.</p>
+                )}
+                {cancelMutation.isError && (
+                  <p className="text-xs text-red-500">Cancellation failed. Please try again.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Customer Information */}
           <Card className="bg-white">
             <CardContent className="p-6">
