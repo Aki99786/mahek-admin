@@ -98,3 +98,38 @@ export const getOrderList = async (queryString = '') => api.get(`admin/orders/${
 // Fetches a single order by its unique ID from the admin API.
 // Used to get detailed information of a specific order.
 export const getOrderById = async (id: string) => api.get(`admin/orders/${id}`);
+
+// ── Shiprocket APIs ────────────────────────────────────────────────────────────
+
+/**
+ * Fetch live Shiprocket tracking events for an order.
+ * Returns AWB, courier name, ETA, and a list of courier events.
+ *
+ * @param {string} id - Internal MongoDB order ID.
+ */
+export const trackOrder = async (id: string) => api.get(`orders/${id}/track`);
+
+/**
+ * Retry creating a Shiprocket shipment for an order where AWB is missing.
+ * Only callable by ADMIN role.
+ *
+ * @param {string} id - Internal MongoDB order ID.
+ */
+export const retryShipment = async (id: string) => api.post(`orders/${id}/retry-ship`, {});
+
+/**
+ * Get the shipping label PDF URL for an order from Shiprocket.
+ * Only callable by ADMIN role.
+ *
+ * @param {string} id - Internal MongoDB order ID.
+ */
+export const downloadShipmentLabel = async (id: string) => api.get(`orders/${id}/label`);
+
+/**
+ * Cancel the Shiprocket shipment for an order and mark it as CANCELLED internally.
+ * Callable by ADMIN or SUPPORT role.
+ *
+ * @param {string} id - Internal MongoDB order ID.
+ */
+export const cancelShipment = async (id: string) => api.patch(`orders/${id}/cancel-shipment`, {});
+
