@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { login } from '@/http/Services/auth';
-import { useTokenStore, useUserDetailStore } from '@/store/store';
+import { useUserDetailStore } from '@/store/store';
 import { showError, showSuccess } from '@/utility/utility';
 import { Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router';
 
 import { useForm } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
@@ -15,32 +16,28 @@ import * as z from 'zod';
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const setToken = useTokenStore((state) => state.setToken);
   const setUserDetails = useUserDetailStore((state) => state.setUserDetail);
+  const navigate = useNavigate();
 
-  // mutation
+  // mutation — the API sets the session cookie; only user details are kept client-side.
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: (data: any) => {
       const userData = data?.data?.admin;
-      const token = data?.headers?.authorization;
-      console.log('token: ', token);
-      setToken(token);
-      setUserDetails(userData);
+      setUserDetails(userData ?? {});
       showSuccess('Welcome to dashboard');
+      navigate('/dashboard', { replace: true });
     },
 
     onError: (error: any) => {
-      console.log('error: ', error);
-      showError(error?.response?.data?.message);
+      showError(error?.response?.data?.message ?? 'Login failed');
     },
   });
 
   const form = useForm({
     defaultValues: { email: '', password: '' },
     onSubmit: async ({ value }) => {
-      const payload: any = { ...value };
-      mutation.mutate(payload);
+      mutation.mutate({ email: value.email, password: value.password });
     },
   });
 

@@ -1,26 +1,16 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware'
 
-// --------------------
-// Token Store
-// --------------------
-export interface TokenStore {
-  token: string,
-  setToken: (data: string) => void;
-};
+// The session token itself lives in an httpOnly cookie managed by the API.
+// Only user details are persisted client-side; a non-empty userDetail means
+// "believed logged in" until GET /auth/me says otherwise.
 
-export const useTokenStore = create<TokenStore>()(
-  devtools(
-    persist(
-      (set) => ({
-        token: "",
-        setToken: (data: string) => set({ token: data }),
-      }),
-      { name: "token-store" } // persist config goes here
-    )
-  )
-);
-
+// Drop the pre-cookie persisted token so it cannot linger in localStorage.
+try {
+  localStorage.removeItem("token-store");
+} catch {
+  // storage unavailable — nothing to clean
+}
 
 // --------------------
 // User Detail Store (object-based)
@@ -32,6 +22,9 @@ export interface UserDetailStore {
   updateUserDetail: (data: Record<string, any>) => void;
   clearUserDetail: () => void;
 };
+
+export const isLoggedIn = (userDetail: Record<string, unknown>) =>
+  Boolean(userDetail && (userDetail.id || userDetail._id || userDetail.email));
 
 export const useUserDetailStore = create<UserDetailStore>()(
   devtools(

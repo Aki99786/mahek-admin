@@ -164,7 +164,7 @@ const AddEditTeamMember = () => {
       permissions: values.permissions,
     });
 
-    console.log("Team member payload:", payload);
+    void payload; // UI-only for now; the backend call is not wired yet.
 
     setIsSubmitting(true);
     // UI-only submission flow as requested.

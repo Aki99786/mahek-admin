@@ -20,7 +20,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useTokenStore } from "@/store/store";
+import { useUserDetailStore } from "@/store/store";
+import { logout as logoutRequest } from "@/http/Services/auth";
+import { useNavigate } from "react-router";
 
 export function NavUser({
   user,
@@ -32,12 +34,17 @@ export function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
-  const { setToken } = useTokenStore((state) => state);
+  const clearUserDetail = useUserDetailStore((state) => state.clearUserDetail);
+  const navigate = useNavigate();
 
-  const logout = () => {
-    console.log("Logging out!");
-    setToken("");
-    
+  const logout = async () => {
+    try {
+      await logoutRequest();
+    } catch {
+      // Cookie may already be gone; clear local state regardless.
+    }
+    clearUserDetail();
+    navigate("/auth/login", { replace: true });
   };
 
   return (
