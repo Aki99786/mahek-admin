@@ -73,7 +73,7 @@ import {
   updateProduct,
 } from "@/http/Services/all";
 import { showError, showSuccess } from "@/utility/utility";
-import { uploadImageToCloudinary } from "@/lib/cloudinary";
+import { uploadImage } from "@/lib/uploads";
 import ProductPreview from "./ProductPreview";
 
 type CategorySlug =
@@ -290,8 +290,8 @@ function CloudinaryUploadAdapterPlugin(editor: {
   editor.plugins.get("FileRepository").createUploadAdapter = (loader) => ({
     upload: async () => {
       const file = await loader.file;
-      const data = await uploadImageToCloudinary(file);
-      return { default: data.secure_url };
+      const imageUrl = await uploadImage(file);
+      return { default: imageUrl };
     },
     abort: () => undefined,
   });
@@ -1481,11 +1481,11 @@ const NewAddUpdateProduct = () => {
       }
 
       try {
-        const data = await uploadImageToCloudinary(file);
+        const imageUrl = await uploadImage(file);
         setVariants((prev) =>
           prev.map((variant) =>
             variant.id === variantId
-              ? { ...variant, images: [...variant.images, data.secure_url] }
+              ? { ...variant, images: [...variant.images, imageUrl] }
               : variant,
           ),
         );

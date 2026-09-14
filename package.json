@@ -12,8 +12,6 @@
   "dependencies": {
     "@ckeditor/ckeditor5-font": "47.6.2",
     "@ckeditor/ckeditor5-react": "^11.0.1",
-    "@cloudinary/react": "^1.14.3",
-    "@cloudinary/url-gen": "^1.22.0",
     "@lexical/react": "^0.38.2",
     "@lexical/rich-text": "^0.38.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -41,7 +39,6 @@
     "axios": "^1.13.2",
     "ckeditor5": "47.6.2",
     "class-variance-authority": "^0.7.1",
-    "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",

@@ -27,7 +27,7 @@ import {
   updateProduct,
 } from "@/http/Services/all";
 import { showError, showSuccess } from "@/utility/utility";
-import { uploadImageToCloudinary } from "@/lib/cloudinary";
+import { uploadImage } from "@/lib/uploads";
 import ProductPreview from "./ProductPreview";
 
 const ProductDescriptionEditor = lazy(
@@ -1138,7 +1138,6 @@ const AddEditProductPage = () => {
     queryKey: ["product", id],
     queryFn: async () => {
       const res = await getProductById(id!);
-      console.log('res: ', res);
       return (res as { data?: ProductApiResponse }).data ?? res;
     },
     enabled: isEditMode && Boolean(id),
@@ -1365,22 +1364,15 @@ const AddEditProductPage = () => {
             images: allImages,
           };
 
-      // Console log form values
-      console.log("=== FORM SUBMISSION ===");
-      console.log("Form Values:", basePayload);
-      console.log("======================");
-
       if (isEditMode && id) {
         const cleanedUpdatePayload =
           (cleanPayloadValue(basePayload) as Record<string, unknown>) ?? {};
         const finalUpdatePayload = omitPayloadKeys(cleanedUpdatePayload);
-        console.log("updatePayload: ", finalUpdatePayload);
         updateMutation.mutate({ id, payload: finalUpdatePayload });
       } else {
         const cleanedCreatePayload =
           (cleanPayloadValue(basePayload) as Record<string, unknown>) ?? {};
         const finalCreatePayload = omitPayloadKeys(cleanedCreatePayload);
-        console.log("createPayload: ", finalCreatePayload);
         createMutation.mutate(finalCreatePayload);
       }
     },
@@ -1454,13 +1446,13 @@ const AddEditProductPage = () => {
       }
 
       try {
-        const data = await uploadImageToCloudinary(file);
+        const imageUrl = await uploadImage(file);
 
         // Update status to success and add image to variant
         setVariants((prev) =>
           prev.map((v) =>
             v.id === variantId
-              ? { ...v, images: [...v.images, data.secure_url] }
+              ? { ...v, images: [...v.images, imageUrl] }
               : v,
           ),
         );
