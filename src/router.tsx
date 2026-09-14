@@ -104,11 +104,6 @@ export const router = createBrowserRouter([
             path: "edit-product/:id",
             element: withSuspense(AddEditProductPage),
           },
-          { path: "new-product", element: withSuspense(NewAddUpdateProduct) },
-          {
-            path: "new-product/:id",
-            element: withSuspense(NewAddUpdateProduct),
-          },
           { path: "detail/:id", element: withSuspense(ProductDetailPage) },
         ],
       },

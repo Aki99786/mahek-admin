@@ -1,16 +1,57 @@
-import { useEffect, useRef, useState, useMemo, memo, lazy, Suspense } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
 import { z } from "zod";
-import { ArrowLeft, Plus, Trash2, Upload, X, ShoppingBag } from "lucide-react";
+import { CKEditor } from "@ckeditor/ckeditor5-react";
+import {
+  Alignment,
+  AutoImage,
+  BlockQuote,
+  Bold,
+  ClassicEditor,
+  Emoji,
+  Essentials,
+  Font,
+  GeneralHtmlSupport,
+  Heading,
+  HorizontalLine,
+  Image,
+  ImageCaption,
+  ImageInsert,
+  ImageResize,
+  ImageStyle,
+  ImageToolbar,
+  ImageUpload,
+  Italic,
+  Link,
+  LinkImage,
+  List,
+  Mention,
+  Paragraph,
+  PasteFromOffice,
+  PictureEditing,
+  RemoveFormat,
+  Strikethrough,
+  Style,
+  Underline,
+  Undo,
+  type EditorConfig,
+} from "ckeditor5";
+import "ckeditor5/ckeditor5.css";
+import {
+  Camera,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  CircleAlert,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -19,8 +60,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
 import {
   createProduct,
   getProductById,
@@ -30,107 +76,543 @@ import { showError, showSuccess } from "@/utility/utility";
 import { uploadImageToCloudinary } from "@/lib/cloudinary";
 import ProductPreview from "./ProductPreview";
 
-const ProductDescriptionEditor = lazy(
-  () => import("@/components/editor/ProductDescriptionEditor"),
-);
+type CategorySlug =
+  | "lehenga"
+  | "saree"
+  | "rajputi-poshak"
+  | "bridal-lehenga"
+  | "banarasi-saree";
 
-// Available sizes for selection
-const AVAILABLE_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
+const CATEGORY_OPTIONS: { value: CategorySlug; label: string }[] = [
+  { value: "saree", label: "Saree" },
+  { value: "banarasi-saree", label: "Banarasi Saree" },
+  { value: "lehenga", label: "Lehenga" },
+  { value: "bridal-lehenga", label: "Bridal Lehenga" },
+  { value: "rajputi-poshak", label: "Rajputi Poshak" },
+];
 
-const LEHENGA_FAMILY_CATEGORIES = [
-  "Lehenga",
-  "Bridal Lehenga",
-  "Rajputi Poshak",
+const LEHENGA_BRANDS = [
+  "Sabyasachi",
+  "Manish Malhotra",
+  "Anita Dongre",
+  "Tarun Tahiliani",
+  "Falguni Shane Peacock",
+  "Shyamal & Bhumika",
+  "Seema Thukral",
+  "Kalki Fashion",
+  "Frontier Raas",
+  "Aza Fashions",
 ] as const;
 
-const SAREE_CATEGORIES = ["Saree", "Banarasi Sarees"] as const;
+const SAREE_BRANDS = [
+  "Sabyasachi",
+  "Manish Malhotra",
+  "Anita Dongre",
+  "Tarun Tahiliani",
+  "Raw Mango",
+  "Ekaya",
+  "Nalli",
+  "Kalanjali",
+  "Tilfi",
+  "Katan Weaves",
+  "Meena Bazaar",
+  "Taneira",
+  "Fabindia",
+  "House of Masaba",
+  "Good Earth",
+] as const;
 
-const STITCH_TYPE_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
-  Lehenga: ["Stitched", "Semi-Stitched", "Unstitched", "Ready to Wear"],
-  "Bridal Lehenga": ["Stitched", "Semi-Stitched", "Unstitched", "Ready to Wear"],
-  "Rajputi Poshak": ["Stitched", "Semi-Stitched", "Unstitched", "Ready to Wear"],
-};
-const FABRIC_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
-  Lehenga: ["Silk", "Cotton", "Georgette", "Chiffon", "Velvet", "Net"],
-  "Bridal Lehenga": ["Silk", "Cotton", "Georgette", "Chiffon", "Velvet", "Net"],
-  "Rajputi Poshak": ["Silk", "Cotton", "Georgette", "Chiffon", "Velvet", "Net"],
-};
-const NECK_TYPE_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
-  Lehenga: ["Round Neck", "V-Neck", "Sweetheart", "Boat Neck", "Off-Shoulder", "Halter Neck", "High Neck"],
-  "Bridal Lehenga": ["Round Neck", "V-Neck", "Sweetheart", "Boat Neck", "Off-Shoulder", "Halter Neck", "High Neck"],
-  "Rajputi Poshak": ["Round Neck", "V-Neck", "Sweetheart", "Boat Neck", "Off-Shoulder", "Halter Neck", "High Neck"],
-};
-const SLEEVE_TYPE_OPTIONS_BY_CATEGORY: Record<string, readonly string[]> = {
-  Lehenga: ["Sleeveless", "Half Sleeve", "Full Sleeve", "Elbow Length", "Three Quarter"],
-  "Bridal Lehenga": ["Sleeveless", "Half Sleeve", "Full Sleeve", "Elbow Length", "Three Quarter"],
-  "Rajputi Poshak": ["Sleeveless", "Half Sleeve", "Full Sleeve", "Elbow Length", "Three Quarter"],
-};
-const SET_INCLUDES_OPTIONS = ["Lehenga", "Blouse", "Dupatta"] as const;
-const WORK_TYPE_OPTIONS = ["Zari", "Embroidery", "Sequins", "Mirror Work", "Stone Work"] as const;
-const OCCASION_OPTIONS = ["Wedding", "Reception", "Engagement", "Festive"] as const;
+const FABRIC_OPTIONS = [
+  "Banarasi Silk",
+  "Kanjeevaram Silk",
+  "Tussar Silk",
+  "Raw Silk",
+  "Art Silk",
+  "Chanderi Silk",
+  "Organza",
+  "Organza Silk",
+  "Georgette",
+  "Chiffon",
+  "Crepe",
+  "Satin",
+  "Net",
+  "Tissue",
+  "Velvet",
+  "Brocade",
+  "Jacquard",
+  "Linen",
+  "Cotton",
+  "Chanderi",
+  "Maheshwari",
+  "Ikat",
+  "Khadi",
+  "Mulmul",
+  "Dola Silk",
+  "Mysore Silk",
+  "Muga Silk",
+  "Dupion Silk",
+  "Silk Blend",
+  "Cotton Silk",
+  "Linen Silk",
+  "Satin Georgette",
+  "Silk Organza",
+  "Taffeta",
+  "Tulle",
+  "Lace",
+] as const;
 
-const isSareeCategory = (category: string) =>
-  SAREE_CATEGORIES.includes(
-    category.trim() as (typeof SAREE_CATEGORIES)[number],
-  );
+const LEHENGA_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"] as const;
+const SAREE_SIZE = "Free Size";
+const ERROR_COLOR_CLASS =
+  "border-2 border-[#B42318] text-[#B42318] focus-visible:border-[#B42318] focus-visible:ring-[#B42318]/20";
 
-const isLehengaFamilyCategory = (category: string) =>
-  LEHENGA_FAMILY_CATEGORIES.includes(
-    category.trim() as (typeof LEHENGA_FAMILY_CATEGORIES)[number],
-  );
-
-const cleanPayloadValue = (value: unknown): unknown => {
-  if (value === null || value === undefined || value === "") {
-    return undefined;
-  }
-
-  if (Array.isArray(value)) {
-    const cleanedArray = value
-      .map((item) => cleanPayloadValue(item))
-      .filter((item) => item !== undefined);
-    return cleanedArray.length > 0 ? cleanedArray : undefined;
-  }
-
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .map(([key, nestedValue]) => [key, cleanPayloadValue(nestedValue)] as const)
-      .filter(([, nestedValue]) => nestedValue !== undefined);
-    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-  }
-
-  return value;
-};
-
-const OMITTED_PAYLOAD_KEYS = new Set([
-  "allColors",
-  "allImages",
-  "allSizes",
-  "avgPrice",
-  "colors",
-  "stockCount",
-  "totalStock",
-  "sizes",
-]);
-
-const omitPayloadKeys = (payload: Record<string, unknown>) =>
-  Object.fromEntries(
-    Object.entries(payload).filter(([key]) => !OMITTED_PAYLOAD_KEYS.has(key)),
-  );
-
-// Image validation constants
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"] as const;
 const ALLOWED_IMAGE_ACCEPT = ".jpg,.jpeg,.png";
 
-/** Stock fields use `type="text"` to avoid scroll-wheel changes; allow digits only. */
-function sanitizeStockInput(raw: string): string {
-  return raw.replace(/\D/g, "");
+const HEX_PATTERN = /^#([0-9A-Fa-f]{6})$/;
+const DEFAULT_PREVIEW_HEX = "#94A3B8";
+const DEFAULT_PICKER_HEX = "#000000";
+
+interface SizeRow {
+  id: string;
+  /** API size `_id` when editing an existing size; omit for newly added sizes. */
+  apiId?: string;
+  size: string;
+  quantity: string;
+  selling_price: string;
+  mrp: string;
 }
 
-// Validation function
-function validateImageFile(
+interface ColorVariant {
+  id: string;
+  /** API variant `_id` when editing an existing variant; omit for newly added variants. */
+  apiId?: string;
+  productId?: string;
+  sku?: string;
+  color: string;
+  images: string[];
+  sizes: SizeRow[];
+  expanded: boolean;
+}
+
+interface ImageUploadStatus {
+  file: File;
+  status: "uploading" | "success" | "error";
+  error?: string;
+}
+
+interface ProductSizePayload {
+  _id?: string;
+  size: string;
+  quantity: number;
+  selling_price: number;
+  mrp: number;
+}
+
+interface ProductVariantPayload {
+  _id?: string;
+  product_id?: string;
+  color: string;
+  images: string[];
+  sizes: ProductSizePayload[];
+  sku?: string;
+}
+
+interface ProductFormPayload {
+  category: string;
+  brand: string;
+  product_name: string;
+  fabric: string;
+  description: string;
+  is_sale: boolean;
+  is_visible: boolean;
+  status: "active" | "inactive";
+  is_delete: false;
+  product_variants: ProductVariantPayload[];
+}
+
+interface ProductApiResponse {
+  _id?: string;
+  name?: string;
+  product_name?: string;
+  brand?: string;
+  category?: string;
+  fabric?: string;
+  description?: string;
+  is_sale?: boolean;
+  is_visible?: boolean;
+  isActive?: boolean;
+  status?: string;
+  product_variants?: Array<{
+    _id?: string;
+    product_id?: string;
+    color?: string;
+    images?: string[];
+    sku?: string;
+    sizes?: Array<{
+      _id?: string;
+      size?: string;
+      quantity?: number | string;
+      selling_price?: number | string;
+      mrp?: number | string;
+      is_cart_active?: boolean;
+      is_wishlist?: boolean;
+    }>;
+  }>;
+  variants?: Array<{
+    _id?: string;
+    color?: string;
+    images?: string[];
+    sellingPrice?: number | string;
+    mrp?: number | string;
+    sizes?:
+      | Array<{
+          _id?: string;
+          size?: string;
+          stock?: number | string;
+          quantity?: number | string;
+        }>
+      | Record<string, { stock?: number | string; selected?: boolean } | number | string>;
+  }>;
+}
+
+const toStringValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  return String(value);
+};
+
+const sanitizeDigits = (raw: string): string => raw.replace(/\D/g, "");
+
+const sanitizeDecimal = (raw: string): string => {
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  const [whole, ...rest] = cleaned.split(".");
+  if (rest.length === 0) return whole;
+  return `${whole}.${rest.join("")}`;
+};
+
+const isEmptyHtml = (html: string): boolean => {
+  if (!html.trim()) return true;
+  if (/<img\b/i.test(html)) return false;
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length === 0;
+};
+
+type UploadLoader = { file: Promise<File> };
+
+function CloudinaryUploadAdapterPlugin(editor: {
+  plugins: {
+    get: (name: "FileRepository") => {
+      createUploadAdapter: (loader: UploadLoader) => {
+        upload: () => Promise<{ default: string }>;
+        abort: () => void;
+      };
+    };
+  };
+}) {
+  editor.plugins.get("FileRepository").createUploadAdapter = (loader) => ({
+    upload: async () => {
+      const file = await loader.file;
+      const data = await uploadImageToCloudinary(file);
+      return { default: data.secure_url };
+    },
+    abort: () => undefined,
+  });
+}
+
+type ProductEditorInstance = {
+  getData: () => string;
+  setData: (data: string) => void;
+};
+
+const PRODUCT_EDITOR_CONFIG = {
+  licenseKey: "GPL",
+  extraPlugins: [CloudinaryUploadAdapterPlugin],
+  plugins: [
+    Essentials,
+    Paragraph,
+    Heading,
+    Bold,
+    Italic,
+    Underline,
+    Strikethrough,
+    Alignment,
+    Font,
+    Link,
+    List,
+    BlockQuote,
+    HorizontalLine,
+    Undo,
+    RemoveFormat,
+    PasteFromOffice,
+    Image,
+    ImageToolbar,
+    ImageCaption,
+    ImageStyle,
+    ImageResize,
+    ImageUpload,
+    ImageInsert,
+    AutoImage,
+    PictureEditing,
+    LinkImage,
+    Emoji,
+    Mention,
+    Style,
+    GeneralHtmlSupport,
+  ],
+  toolbar: {
+    items: [
+      "undo",
+      "redo",
+      "|",
+      "heading",
+      "alignment",
+      "|",
+      "bold",
+      "italic",
+      "underline",
+      "strikethrough",
+      "removeFormat",
+      "|",
+      "fontColor",
+      "fontBackgroundColor",
+      "style",
+      "|",
+      "bulletedList",
+      "numberedList",
+      "blockQuote",
+      "horizontalLine",
+      "|",
+      "link",
+      "insertImage",
+      "emoji",
+    ],
+    shouldNotGroupWhenFull: false,
+  },
+  heading: {
+    options: [
+      { model: "paragraph" as const, title: "Paragraph", class: "ck-heading_paragraph" },
+      { model: "heading2" as const, view: "h2", title: "Heading", class: "ck-heading_heading2" },
+      { model: "heading3" as const, view: "h3", title: "Subheading", class: "ck-heading_heading3" },
+    ],
+  },
+  image: {
+    toolbar: [
+      "imageStyle:inline",
+      "imageStyle:block",
+      "imageStyle:side",
+      "|",
+      "toggleImageCaption",
+      "imageTextAlternative",
+      "|",
+      "linkImage",
+    ],
+  },
+  link: {
+    addTargetToExternalLinks: true,
+    defaultProtocol: "https://",
+  },
+  style: {
+    definitions: [
+      { name: "Best Seller", element: "span", classes: ["pd-badge", "pd-badge-best"] },
+      { name: "New Arrival", element: "span", classes: ["pd-badge", "pd-badge-new"] },
+      { name: "20% OFF", element: "span", classes: ["pd-badge", "pd-badge-off"] },
+      { name: "Limited Offer", element: "span", classes: ["pd-badge", "pd-badge-limited"] },
+      { name: "Premium", element: "span", classes: ["pd-badge", "pd-badge-premium"] },
+      { name: "Trending", element: "span", classes: ["pd-badge", "pd-badge-trending"] },
+    ],
+  },
+  htmlSupport: {
+    allow: [{ name: "span", classes: true, styles: true }],
+  },
+  placeholder: "Describe product...",
+} as EditorConfig;
+
+const ProductRichTextEditor = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (nextValue: string) => void;
+}) => {
+  const editorRef = useRef<ProductEditorInstance | null>(null);
+  const lastEmittedRef = useRef(value);
+  const initialDataRef = useRef(value);
+
+  useEffect(() => {
+    if (value === lastEmittedRef.current) return;
+    lastEmittedRef.current = value;
+    editorRef.current?.setData(value || "");
+  }, [value]);
+
+  return (
+    <div className="product-rich-text-editor">
+      <style>{`
+      .product-rich-text-editor .ck.ck-editor__main > .ck-editor__editable {
+        min-height: 280px;
+        max-height: 420px;
+        overflow-y: auto;
+      }
+      .product-rich-text-editor .ck.ck-toolbar {
+        border: 0;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f8fafc;
+      }
+      .product-rich-text-editor .ck.ck-editor__main > .ck-editor__editable:not(.ck-focused) {
+        border: 0;
+        box-shadow: none;
+      }
+      .product-rich-text-editor .ck.ck-editor__main > .ck-editor__editable.ck-focused {
+        border: 0;
+        box-shadow: none;
+      }
+      .product-rich-text-editor .pd-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.4;
+        letter-spacing: 0.02em;
+      }
+      .product-rich-text-editor .pd-badge-best { background: #FFF3D6; color: #92400E; }
+      .product-rich-text-editor .pd-badge-new { background: #DBEAFE; color: #1D4ED8; }
+      .product-rich-text-editor .pd-badge-off { background: #FCE7F3; color: #BE185D; }
+      .product-rich-text-editor .pd-badge-limited { background: #FEE2E2; color: #B91C1C; }
+      .product-rich-text-editor .pd-badge-premium { background: #EDE9FE; color: #6D28D9; }
+      .product-rich-text-editor .pd-badge-trending { background: #DCFCE7; color: #15803D; }
+    `}</style>
+      <CKEditor
+        editor={ClassicEditor}
+        config={PRODUCT_EDITOR_CONFIG}
+        data={initialDataRef.current}
+        onReady={(editor: ProductEditorInstance) => {
+          editorRef.current = editor;
+        }}
+        onChange={(_event: unknown, editor: ProductEditorInstance) => {
+          const html = editor.getData();
+          lastEmittedRef.current = html;
+          onChange(html);
+        }}
+      />
+    </div>
+  );
+};
+
+const isSareeCategory = (category: string): boolean =>
+  category === "saree" || category === "banarasi-saree";
+
+const isLehengaCategory = (category: string): boolean =>
+  category === "lehenga" ||
+  category === "bridal-lehenga" ||
+  category === "rajputi-poshak";
+
+const getBrandsForCategory = (category: string): readonly string[] => {
+  if (isSareeCategory(category)) return SAREE_BRANDS;
+  if (isLehengaCategory(category)) return LEHENGA_BRANDS;
+  return [];
+};
+
+const getSizesForCategory = (category: string): readonly string[] => {
+  if (isSareeCategory(category)) return [SAREE_SIZE];
+  if (isLehengaCategory(category)) return LEHENGA_SIZES;
+  return LEHENGA_SIZES;
+};
+
+const normalizeCategory = (value: string): CategorySlug | "" => {
+  const key = value.trim().toLowerCase().replace(/\s+/g, "-");
+  const aliases: Record<string, CategorySlug> = {
+    saree: "saree",
+    "banarasi-saree": "banarasi-saree",
+    "banarasi-sarees": "banarasi-saree",
+    lehenga: "lehenga",
+    "bridal-lehenga": "bridal-lehenga",
+    "rajputi-poshak": "rajputi-poshak",
+  };
+  return aliases[key] ?? "";
+};
+
+const createSizeRow = (size = ""): SizeRow => ({
+  id: crypto.randomUUID(),
+  size,
+  quantity: "",
+  selling_price: "",
+  mrp: "",
+});
+
+const createColorVariant = (
+  category = "",
+  expanded = true,
+): ColorVariant => ({
+  id: crypto.randomUUID(),
+  color: "",
+  images: [],
+  sizes: isSareeCategory(category) ? [createSizeRow(SAREE_SIZE)] : [],
+  expanded,
+});
+
+const applyCategoryToVariant = (
+  variant: ColorVariant,
+  category: string,
+): ColorVariant => {
+  if (isSareeCategory(category)) {
+    const existing = variant.sizes.find((row) => row.size === SAREE_SIZE);
+    return {
+      ...variant,
+      sizes: [existing ?? createSizeRow(SAREE_SIZE)],
+    };
+  }
+
+  return {
+    ...variant,
+    sizes: variant.sizes.filter((row) => row.size && row.size !== SAREE_SIZE),
+  };
+};
+
+const FieldError = ({ message }: { message?: string }) => {
+  if (!message) return null;
+  return (
+    <p className="mt-1.5 flex items-center gap-1.5 text-xs text-[#B42318]">
+      <CircleAlert className="size-3.5 shrink-0" />
+      {message}
+    </p>
+  );
+};
+
+const isValidHex = (value: string): boolean => HEX_PATTERN.test(value.trim());
+
+const normalizeHex = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const withHash = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+  if (!isValidHex(withHash)) return null;
+  return withHash.toUpperCase();
+};
+
+const previewHex = (value: string): string =>
+  normalizeHex(value) ?? DEFAULT_PREVIEW_HEX;
+
+const pickerHex = (value: string): string =>
+  normalizeHex(value) ?? DEFAULT_PICKER_HEX;
+
+const sanitizeHexInput = (raw: string): string => {
+  const withoutSpaces = raw.replace(/\s/g, "");
+  if (withoutSpaces === "") return "";
+  const body = withoutSpaces.startsWith("#")
+    ? withoutSpaces.slice(1)
+    : withoutSpaces;
+  return `#${body.replace(/[^0-9A-Fa-f]/g, "").slice(0, 6)}`;
+};
+
+const getColorError = (color: string, showErrors: boolean): string => {
+  if (!showErrors) return "";
+  if (!color.trim()) return "Color is required";
+  if (!normalizeHex(color)) return "Enter a valid HEX color";
+  return "";
+};
+
+const validateImageFile = (
   file: File,
-): { valid: true } | { valid: false; error: string } {
+): { valid: true } | { valid: false; error: string } => {
   if (
     !ALLOWED_IMAGE_TYPES.includes(
       file.type as (typeof ALLOWED_IMAGE_TYPES)[number],
@@ -148,987 +630,616 @@ function validateImageFile(
     };
   }
   return { valid: true };
-}
-
-// Types
-interface ProductVariant {
-  id: string;
-  color: string;
-  sellingPrice: string;
-  mrp: string;
-  sizes: Record<string, { selected: boolean; stock: string }>;
-  images: string[];
-  sizeDetails?: string; // For Saree category - description of size
-  stitchType?: string;
-  fabric?: string;
-  neckType?: string;
-  sleeveType?: string;
-  setIncludes?: string[];
-  workType?: string[];
-  occasion?: string[];
-  measurements?: {
-    waist?: string;
-    bust?: string;
-    lehengaLength?: string;
-    dupattaLength?: string;
-    flare?: string;
-  };
-}
-
-interface ProductApiResponse {
-  _id: string;
-  name: string;
-  slug?: string;
-  brand?: string;
-  category?: string;
-  pattern?: string;
-  sleeveType?: string;
-  fabric?: string;
-  neckType?: string;
-  description?: string;
-  isActive?: boolean;
-  isFeatured?: boolean;
-  isPreOrder?: boolean;
-  avgPrice: number;
-  totalStock: number;
-  allImages: string[];
-  allColors: string[];
-  allSizes: string[];
-  variants: Array<{
-    variantId: string;
-    color: string;
-    sellingPrice: number;
-    mrp: number;
-    sizes:
-      | Array<{
-          size: string;
-          stock: number;
-          selected?: boolean;
-        }>
-      | Record<string, { stock?: number | string; selected?: boolean } | number | string>;
-    images: string[];
-    sizeDetails?: string;
-    stitchType?: string;
-    fabric?: string;
-    neckType?: string;
-    sleeveType?: string;
-    setIncludes?: string[];
-    workType?: string[];
-    occasion?: string[];
-    measurements?: {
-      waist?: string;
-      bust?: string;
-      lehengaLength?: string;
-      dupattaLength?: string;
-      flare?: string;
-    };
-    _id?: string;
-  }>;
-  averageRating?: number;
-  totalReviews?: number;
-  reviews?: unknown[];
-  createdAt?: string;
-  updatedAt?: string;
-  __v?: number;
-}
-
-const toStringValue = (value: unknown): string => {
-  if (value === null || value === undefined) return "";
-  return String(value);
 };
 
-const normalizeStringArray = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => toStringValue(item).trim())
-    .filter(Boolean);
+const sellingExceedsMrp = (sellingPrice: string, mrp: string): boolean => {
+  if (!sellingPrice || !mrp) return false;
+  return Number(sellingPrice) > Number(mrp);
 };
 
-const normalizeMeasurements = (
-  value: unknown,
-): ProductVariant["measurements"] => {
-  if (!value || typeof value !== "object") return {};
-  const source = value as Record<string, unknown>;
-  return {
-    waist: toStringValue(source.waist),
-    bust: toStringValue(source.bust),
-    lehengaLength: toStringValue(source.lehengaLength),
-    dupattaLength: toStringValue(source.dupattaLength),
-    flare: toStringValue(source.flare),
-  };
-};
+const variantStock = (variant: ColorVariant): number =>
+  variant.sizes.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
 
-const normalizeSizes = (
-  rawSizes: ProductApiResponse["variants"][number]["sizes"] | unknown,
-  category: string,
-): Record<string, { selected: boolean; stock: string }> => {
-  const isSareeFlow = isSareeCategory(category);
-  const fallback: Record<string, { selected: boolean; stock: string }> =
-    isSareeFlow
-      ? { ONE_SIZE: { selected: true, stock: "" } }
-      : {};
-
-  if (Array.isArray(rawSizes)) {
-    const parsed = rawSizes.reduce(
-      (acc, sizeItem) => {
-        const item = sizeItem as {
-          size?: unknown;
-          stock?: unknown;
-          selected?: unknown;
-        };
-        const sizeKey = toStringValue(item.size).trim();
-        if (!sizeKey) return acc;
-        acc[sizeKey] = {
-          selected:
-            typeof item.selected === "boolean" ? item.selected : true,
-          stock: toStringValue(item.stock),
-        };
-        return acc;
-      },
-      {} as Record<string, { selected: boolean; stock: string }>,
-    );
-
-    return Object.keys(parsed).length > 0 ? parsed : fallback;
-  }
-
-  if (rawSizes && typeof rawSizes === "object") {
-    const parsed = Object.entries(rawSizes as Record<string, unknown>).reduce(
-      (acc, [sizeKey, sizeValue]) => {
-        if (!sizeKey) return acc;
-        if (sizeValue && typeof sizeValue === "object") {
-          const sizeObj = sizeValue as Record<string, unknown>;
-          acc[sizeKey] = {
-            selected:
-              typeof sizeObj.selected === "boolean"
-                ? sizeObj.selected
-                : true,
-            stock: toStringValue(sizeObj.stock),
+const mapApiProductToVariants = (product: ProductApiResponse): ColorVariant[] => {
+  if (Array.isArray(product.product_variants) && product.product_variants.length > 0) {
+    return product.product_variants.map((variant, index) => {
+      const variantApiId = toStringValue(variant._id);
+      return {
+        id: variantApiId || `variant-${index}-${crypto.randomUUID()}`,
+        apiId: variantApiId || undefined,
+        productId: toStringValue(variant.product_id) || undefined,
+        sku: toStringValue(variant.sku) || undefined,
+        color: toStringValue(variant.color),
+        images: Array.isArray(variant.images) ? variant.images : [],
+        expanded: index === 0,
+        sizes: (variant.sizes ?? []).map((size) => {
+          const sizeApiId = toStringValue(size._id);
+          return {
+            id: sizeApiId || crypto.randomUUID(),
+            apiId: sizeApiId || undefined,
+            size: toStringValue(size.size),
+            quantity: toStringValue(size.quantity),
+            selling_price: toStringValue(size.selling_price),
+            mrp: toStringValue(size.mrp),
           };
-          return acc;
-        }
-
-        acc[sizeKey] = {
-          selected: true,
-          stock: toStringValue(sizeValue),
-        };
-        return acc;
-      },
-      {} as Record<string, { selected: boolean; stock: string }>,
-    );
-
-    return Object.keys(parsed).length > 0 ? parsed : fallback;
+        }),
+      };
+    });
   }
 
-  return fallback;
-};
+  if (Array.isArray(product.variants) && product.variants.length > 0) {
+    return product.variants.map((variant, index) => {
+      const sellingPrice = toStringValue(variant.sellingPrice);
+      const mrp = toStringValue(variant.mrp);
+      const variantApiId = toStringValue(variant._id);
+      let sizeRows: SizeRow[] = [];
 
-// Image upload status
-interface ImageUploadStatus {
-  file: File;
-  status: "uploading" | "success" | "error";
-  url?: string;
-  error?: string;
-}
-
-// Helper to generate SKU
-const generateSKU = (
-  productName: string,
-  color: string,
-  size: string,
-): string => {
-  const prefix =
-    productName
-      .split(" ")
-      .map((w) => w.charAt(0).toUpperCase())
-      .join("")
-      .slice(0, 3) || "PRD";
-  const colorCode = color.slice(0, 3).toUpperCase();
-  const sizeCode = size.toUpperCase();
-  const random = Math.floor(Math.random() * 1000);
-  return `${prefix}-${colorCode}-${sizeCode}-${random}`;
-};
-
-// Memoized variant card component for performance
-const VariantCard = memo(
-  ({
-    variant,
-    index,
-    productName,
-    category,
-    onUpdate,
-    onRemove,
-    onMultipleImagesUpload,
-    onImageRemove,
-    uploadingImages,
-  }: {
-    variant: ProductVariant;
-    index: number;
-    productName: string;
-    category: string;
-    onUpdate: (id: string, updates: Partial<ProductVariant>) => void;
-    onRemove: (id: string) => void;
-    onMultipleImagesUpload: (
-      variantId: string,
-      files: FileList,
-    ) => Promise<void>;
-    onImageRemove: (variantId: string, imageIndex: number) => void;
-    uploadingImages: Record<string, ImageUploadStatus[]>;
-  }) => {
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [colorError, setColorError] = useState("");
-    const [priceError, setPriceError] = useState("");
-
-    const calculateDiscount = useMemo(() => {
-      const selling = parseFloat(variant.sellingPrice) || 0;
-      const mrp = parseFloat(variant.mrp) || 0;
-      if (mrp <= 0 || selling >= mrp) return 0;
-      return Math.round(((mrp - selling) / mrp) * 100);
-    }, [variant.sellingPrice, variant.mrp]);
-
-    const autoGeneratedSKUs = useMemo(() => {
-      return Object.entries(variant.sizes)
-        .filter(([, data]) => data.selected)
-        .map(([size]) => ({
-          size,
-          sku: generateSKU(productName, variant.color, size),
-        }));
-    }, [variant.sizes, variant.color, productName]);
-
-    const handleColorChange = (value: string) => {
-      if (!value.trim()) {
-        setColorError("Color is required");
-      } else {
-        setColorError("");
-      }
-      onUpdate(variant.id, { color: value });
-    };
-
-    const handlePriceChange = (
-      field: "sellingPrice" | "mrp",
-      value: string,
-    ) => {
-      const numValue = parseFloat(value) || 0;
-      if (
-        field === "sellingPrice" &&
-        variant.mrp &&
-        numValue >= parseFloat(variant.mrp)
-      ) {
-        setPriceError("Selling price must be less than MRP");
-      } else {
-        setPriceError("");
-      }
-      onUpdate(variant.id, { [field]: value });
-    };
-
-    const handleSizeToggle = (size: string) => {
-      const newSizes = {
-        ...variant.sizes,
-        [size]: {
-          ...variant.sizes[size],
-          selected: !variant.sizes[size]?.selected,
-        },
-      };
-      onUpdate(variant.id, { sizes: newSizes });
-    };
-
-    const handleStockChange = (size: string, raw: string) => {
-      const stock = sanitizeStockInput(raw);
-      const newSizes = {
-        ...variant.sizes,
-        [size]: {
-          ...variant.sizes[size],
-          stock,
-        },
-      };
-      onUpdate(variant.id, { sizes: newSizes });
-    };
-
-    const getBulkStockValue = (): string => {
-      if (isSareeCategory(category)) {
-        return variant.sizes["ONE_SIZE"]?.stock || "";
-      }
-      const selected = Object.entries(variant.sizes).filter(([, data]) => data.selected);
-      if (selected.length === 0) return "";
-      const values = selected.map(([, data]) => data.stock || "");
-      const first = values[0];
-      return values.every((value) => value === first) ? first : "";
-    };
-
-    const handleBulkStockChange = (raw: string) => {
-      const stock = sanitizeStockInput(raw);
-      if (isSareeCategory(category)) {
-        handleStockChange("ONE_SIZE", stock);
-        return;
-      }
-      const selected = Object.entries(variant.sizes).filter(([, data]) => data.selected);
-      if (selected.length === 0) return;
-      const nextSizes = { ...variant.sizes };
-      selected.forEach(([size]) => {
-        nextSizes[size] = { ...nextSizes[size], stock };
-      });
-      onUpdate(variant.id, { sizes: nextSizes });
-    };
-
-    const toggleMultiSelect = (
-      field: "setIncludes" | "workType" | "occasion",
-      option: string,
-    ) => {
-      const current = variant[field] || [];
-      const exists = current.includes(option);
-      const next = exists
-        ? current.filter((v) => v !== option)
-        : [...current, option];
-      onUpdate(variant.id, { [field]: next } as Partial<ProductVariant>);
-    };
-
-    const selectedSizes = Object.entries(variant.sizes).filter(
-      ([, data]) => data.selected,
-    );
-    const totalStock = selectedSizes.reduce(
-      (sum, [, data]) => sum + (parseInt(data.stock) || 0),
-      0,
-    );
-
-    const currentUploadStatuses = uploadingImages[variant.id] || [];
-    const hasUploadingImages = currentUploadStatuses.some(
-      (status) => status.status === "uploading",
-    );
-    const lehengaFlow = isLehengaFamilyCategory(category);
-
-    return (
-      <Card className="p-4 bg-white border border-gray-200 shadow-sm">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-600 font-semibold text-sm">
-              {index + 1}
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 text-sm">
-                {variant.color || "New Variant"}{" "}
-                {selectedSizes.length > 0 && (
-                  <span className="text-gray-500 font-normal text-xs">
-                    — {selectedSizes.map(([size]) => size).join(", ")}
-                  </span>
-                )}
-              </h3>
-              {calculateDiscount > 0 && (
-                <div className="mt-0.5 flex items-center gap-2">
-                  <span className="text-base font-bold text-gray-900">
-                    ₹{variant.sellingPrice || "0"}
-                  </span>
-                  <span className="text-xs text-gray-400 line-through">
-                    ₹{variant.mrp || "0"}
-                  </span>
-                  <span className="text-xs font-semibold text-green-600">
-                    ({calculateDiscount}% OFF)
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={() => onRemove(variant.id)}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-4 gap-3 mb-3">
-          {/* Color */}
-          <div className="space-y-1">
-            <FieldLabel className="text-xs">
-              Color <span className="text-red-500">*</span>
-            </FieldLabel>
-            <Input
-              placeholder="Red"
-              value={variant.color}
-              onChange={(e) => handleColorChange(e.target.value)}
-              className={cn("h-8 text-sm", colorError && "border-red-500")}
-            />
-            {colorError && <p className="text-xs text-red-500">{colorError}</p>}
-          </div>
-
-          {/* Selling Price */}
-          <div className="space-y-1">
-            <FieldLabel className="text-xs">
-              Selling Price (₹) <span className="text-red-500">*</span>
-            </FieldLabel>
-            <Input
-              type="number"
-              placeholder="400"
-              value={variant.sellingPrice}
-              onChange={(e) =>
-                handlePriceChange("sellingPrice", e.target.value)
-              }
-              className={cn("h-8 text-sm", priceError && "border-red-500")}
-            />
-          </div>
-
-          {/* MRP */}
-          <div className="space-y-1">
-            <FieldLabel className="text-xs">
-              MRP (₹) <span className="text-red-500">*</span>
-            </FieldLabel>
-            <Input
-              type="number"
-              placeholder="1200"
-              value={variant.mrp}
-              onChange={(e) => handlePriceChange("mrp", e.target.value)}
-              className="h-8 text-sm"
-            />
-          </div>
-
-          {!lehengaFlow && (
-            <div className="space-y-1">
-              <FieldLabel className="text-xs">
-                Stock <span className="text-red-500">*</span>
-              </FieldLabel>
-              <Input
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="0"
-                value={getBulkStockValue()}
-                onChange={(e) => handleBulkStockChange(e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-          )}
-        </div>
-
-        {priceError && (
-          <p className="text-xs text-red-500 -mt-2 mb-2">{priceError}</p>
-        )}
-
-        {/* Discount Display */}
-        {calculateDiscount > 0 && (
-          <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-base font-bold text-green-700">
-                  ₹{variant.sellingPrice}
-                </span>
-                <span className="ml-2 text-xs text-gray-500 line-through">
-                  ₹{variant.mrp}
-                </span>
-                <span className="ml-2 text-xs font-semibold text-green-600">
-                  ({calculateDiscount}% OFF)
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                Total stock:{" "}
-                <span className="font-semibold text-gray-900">
-                  {totalStock}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Sizes Selection - Hide for Saree category */}
-        {!isSareeCategory(category) ? (
-          <div className="space-y-2 mb-3">
-            <FieldLabel className="text-xs">
-              Sizes <span className="text-red-500">*</span>
-            </FieldLabel>
-            <p className="text-xs text-gray-600">
-              Select sizes and set stock for each
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {AVAILABLE_SIZES.map((size) => (
-                <Button
-                  key={size}
-                  type="button"
-                  variant="outline"
-                  className={cn(
-                    "h-8 px-4 border-2 transition-colors font-medium text-sm",
-                    variant.sizes[size]?.selected
-                      ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
-                  )}
-                  onClick={() => handleSizeToggle(size)}
-                >
-                  {size}
-                </Button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2 mb-3">
-            <FieldLabel className="text-xs">Size</FieldLabel>
-            <div className="inline-flex items-center px-4 py-2 border-2 border-pink-500 rounded-full text-pink-600 font-semibold text-sm">
-              Onesize
-            </div>
-            <div className="mt-3">
-              <FieldLabel className="text-xs mb-2">Size Details (Optional)</FieldLabel>
-              <textarea
-                placeholder="E.g., Length: 5.5 metres plus 0.8 metre blouse piece&#10;Width: 1.06 metres (approx.)"
-                value={variant.sizeDetails || ""}
-                onChange={(e) => onUpdate(variant.id, { sizeDetails: e.target.value })}
-                className="w-full h-20 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Stock per Size - For Saree, show single stock input */}
-        {isSareeCategory(category) ? (
-          <div className="space-y-2 mb-3">
-            <FieldLabel className="text-xs">
-              Stock <span className="text-red-500">*</span>
-            </FieldLabel>
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="0"
-              value={variant.sizes["ONE_SIZE"]?.stock || ""}
-              onChange={(e) => handleStockChange("ONE_SIZE", e.target.value)}
-              className="h-8 text-sm w-full"
-            />
-          </div>
-        ) : (
-          selectedSizes.length > 0 && (
-            <div className="space-y-2 mb-3">
-              <FieldLabel className="text-xs">
-                Stock per Size <span className="text-red-500">*</span>
-              </FieldLabel>
-              <div className="grid grid-cols-4 gap-2">
-                {selectedSizes.map(([size, data]) => (
-                  <div key={size} className="space-y-1">
-                    <label className="text-xs font-medium text-gray-700">
-                      {size}
-                    </label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      placeholder="0"
-                      value={data.stock}
-                      onChange={(e) => handleStockChange(size, e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+      if (Array.isArray(variant.sizes)) {
+        sizeRows = variant.sizes
+          .map((item) => {
+            const sizeApiId = toStringValue(item._id);
+            return {
+              id: sizeApiId || crypto.randomUUID(),
+              apiId: sizeApiId || undefined,
+              size: toStringValue(item.size),
+              quantity: toStringValue(item.quantity ?? item.stock),
+              selling_price: sellingPrice,
+              mrp,
+            };
+          })
+          .filter((row) => row.size);
+      } else if (variant.sizes && typeof variant.sizes === "object") {
+        sizeRows = Object.entries(variant.sizes)
+          .map(([size, value]) => {
+            const quantity =
+              value && typeof value === "object"
+                ? toStringValue((value as { stock?: unknown }).stock)
+                : toStringValue(value);
+            return {
+              id: crypto.randomUUID(),
+              size,
+              quantity,
+              selling_price: sellingPrice,
+              mrp,
+            };
+          })
+          .map((row) =>
+            row.size === "ONE_SIZE" ? { ...row, size: SAREE_SIZE } : row,
           )
+          .filter((row) => row.size);
+      }
+
+      return {
+        id: variantApiId || `variant-${index}-${crypto.randomUUID()}`,
+        apiId: variantApiId || undefined,
+        color: toStringValue(variant.color),
+        images: Array.isArray(variant.images) ? variant.images : [],
+        expanded: index === 0,
+        sizes: sizeRows,
+      };
+    });
+  }
+
+  return [createColorVariant(normalizeCategory(product.category ?? ""), true)];
+};
+
+const toApiPayload = ({
+  category,
+  brand,
+  product_name,
+  fabric,
+  description,
+  is_sale,
+  is_visible,
+  variants,
+}: {
+  category: string;
+  brand: string;
+  product_name: string;
+  fabric: string;
+  description: string;
+  is_sale: boolean;
+  is_visible: boolean;
+  variants: ColorVariant[];
+}): ProductFormPayload => ({
+  category,
+  brand,
+  product_name,
+  fabric,
+  description,
+  is_sale,
+  is_visible,
+  status: is_sale ? "active" : "inactive",
+  is_delete: false,
+  product_variants: variants.map((variant) => {
+    const sizePayloads: ProductSizePayload[] = variant.sizes.map((row) => {
+      const sizePayload: ProductSizePayload = {
+        size: row.size,
+        quantity: Number(row.quantity),
+        selling_price: Number(row.selling_price),
+        mrp: row.mrp === "" ? 0 : Number(row.mrp),
+      };
+      // Same size `_id` → backend updates; no `_id` → backend adds
+      if (row.apiId) {
+        sizePayload._id = row.apiId;
+      }
+      return sizePayload;
+    });
+
+    const variantPayload: ProductVariantPayload = {
+      color: normalizeHex(variant.color) ?? variant.color.trim().toUpperCase(),
+      images: variant.images,
+      sizes: sizePayloads,
+    };
+    // Same variant `_id` → backend updates; no `_id` → backend adds
+    if (variant.apiId) {
+      variantPayload._id = variant.apiId;
+    }
+    if (variant.productId) {
+      variantPayload.product_id = variant.productId;
+    }
+    if (variant.sku) {
+      variantPayload.sku = variant.sku;
+    }
+    return variantPayload;
+  }),
+});
+
+const ToggleSwitch = ({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+}) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    onClick={() => onChange(!checked)}
+    className="inline-flex items-center gap-2"
+  >
+    <span
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+        checked ? "bg-[#6D5EF5]" : "bg-gray-300",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block size-5 rounded-full bg-white shadow transition-transform",
+          checked ? "translate-x-5" : "translate-x-0.5",
         )}
-
-        {lehengaFlow && (
-          <div className="space-y-3 mb-3 border-t border-gray-200 pt-3">
-            <h4 className="text-sm font-semibold text-gray-900">Product Attributes</h4>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <FieldLabel className="text-xs">Stitch Type</FieldLabel>
-                <Select
-                  value={variant.stitchType || ""}
-                  onValueChange={(value) => onUpdate(variant.id, { stitchType: value })}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(STITCH_TYPE_OPTIONS_BY_CATEGORY[category] || STITCH_TYPE_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <FieldLabel className="text-xs">
-                  Fabric <span className="text-red-500">*</span>
-                </FieldLabel>
-                <Select
-                  value={variant.fabric || ""}
-                  onValueChange={(value) => onUpdate(variant.id, { fabric: value })}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(FABRIC_OPTIONS_BY_CATEGORY[category] || FABRIC_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <FieldLabel className="text-xs">Set Includes</FieldLabel>
-              <div className="flex gap-2 flex-wrap">
-                {SET_INCLUDES_OPTIONS.map((option) => {
-                  const selected = (variant.setIncludes || []).includes(option);
-                  return (
-                    <Button
-                      key={option}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "h-8 px-3 border-2 transition-colors font-medium text-sm",
-                        selected
-                          ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
-                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
-                      )}
-                      onClick={() => toggleMultiSelect("setIncludes", option)}
-                    >
-                      {option}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <FieldLabel className="text-xs">Work Type</FieldLabel>
-              <div className="flex gap-2 flex-wrap">
-                {WORK_TYPE_OPTIONS.map((option) => {
-                  const selected = (variant.workType || []).includes(option);
-                  return (
-                    <Button
-                      key={option}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "h-8 px-3 border-2 transition-colors font-medium text-sm",
-                        selected
-                          ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
-                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
-                      )}
-                      onClick={() => toggleMultiSelect("workType", option)}
-                    >
-                      {option}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <FieldLabel className="text-xs">Occasion</FieldLabel>
-              <div className="flex gap-2 flex-wrap">
-                {OCCASION_OPTIONS.map((option) => {
-                  const selected = (variant.occasion || []).includes(option);
-                  return (
-                    <Button
-                      key={option}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "h-8 px-3 border-2 transition-colors font-medium text-sm",
-                        selected
-                          ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
-                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
-                      )}
-                      onClick={() => toggleMultiSelect("occasion", option)}
-                    >
-                      {option}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {category === "Bridal Lehenga" && (
-              <div className="border-t border-gray-200 pt-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <FieldLabel className="text-xs">Blouse Details</FieldLabel>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <FieldLabel className="text-xs">
-                      Neck Type <span className="text-red-500">*</span>
-                    </FieldLabel>
-                    <Select
-                      value={variant.neckType || ""}
-                      onValueChange={(value) => onUpdate(variant.id, { neckType: value })}
-                    >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(NECK_TYPE_OPTIONS_BY_CATEGORY[category] || NECK_TYPE_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <FieldLabel className="text-xs">
-                      Sleeve Type <span className="text-red-500">*</span>
-                    </FieldLabel>
-                    <Select
-                      value={variant.sleeveType || ""}
-                      onValueChange={(value) => onUpdate(variant.id, { sleeveType: value })}
-                    >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(SLEEVE_TYPE_OPTIONS_BY_CATEGORY[category] || SLEEVE_TYPE_OPTIONS_BY_CATEGORY.Lehenga).map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="border-t border-gray-200 pt-3">
-              <h5 className="text-base font-semibold text-gray-800">Measurements (Optional)</h5>
-              <p className="text-xs text-gray-500 mb-3">Add custom measurements</p>
-              <div className="grid grid-cols-4 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-600">Waist</label>
-                  <Input
-                    placeholder="e.g., 32 in"
-                    value={variant.measurements?.waist || ""}
-                    onChange={(e) =>
-                      onUpdate(variant.id, {
-                        measurements: { ...variant.measurements, waist: e.target.value },
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-600">Bust</label>
-                  <Input
-                    placeholder="e.g., 32 in"
-                    value={variant.measurements?.bust || ""}
-                    onChange={(e) =>
-                      onUpdate(variant.id, {
-                        measurements: { ...variant.measurements, bust: e.target.value },
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-600">Lehenga Length</label>
-                  <Input
-                    placeholder="e.g., 32 in"
-                    value={variant.measurements?.lehengaLength || ""}
-                    onChange={(e) =>
-                      onUpdate(variant.id, {
-                        measurements: {
-                          ...variant.measurements,
-                          lehengaLength: e.target.value,
-                        },
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-600">Dupatta Length</label>
-                  <Input
-                    placeholder="e.g., 32 in"
-                    value={variant.measurements?.dupattaLength || ""}
-                    onChange={(e) =>
-                      onUpdate(variant.id, {
-                        measurements: {
-                          ...variant.measurements,
-                          dupattaLength: e.target.value,
-                        },
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="mt-2 max-w-[25%] space-y-1">
-                <label className="text-xs text-gray-600">Flare</label>
-                <Input
-                  placeholder="e.g., 32 in"
-                  value={variant.measurements?.flare || ""}
-                  onChange={(e) =>
-                    onUpdate(variant.id, {
-                      measurements: { ...variant.measurements, flare: e.target.value },
-                    })
-                  }
-                  className="h-8 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Auto-generated SKUs */}
-        {autoGeneratedSKUs.length > 0 && (
-          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="text-xs font-semibold text-gray-700 mb-1">
-              AUTO-GENERATED SKUS
-            </h4>
-            <div className="flex gap-2 flex-wrap">
-              {autoGeneratedSKUs.map(({ sku }) => (
-                <span
-                  key={sku}
-                  className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-mono rounded"
-                >
-                  {sku}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Product Images */}
-        <div className="space-y-2">
-          <FieldLabel className="text-xs">
-            Product Images <span className="text-red-500">*</span>
-          </FieldLabel>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ALLOWED_IMAGE_ACCEPT}
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              const files = e.target.files;
-              if (files && files.length > 0) {
-                onMultipleImagesUpload(variant.id, files);
-              }
-              if (fileInputRef.current) fileInputRef.current.value = "";
-            }}
-          />
-
-          <div className="grid grid-cols-5 gap-2">
-            {/* Existing Images */}
-            {variant.images.map((image, imgIndex) => (
-              <div
-                key={`img-${imgIndex}`}
-                className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group"
-              >
-                <img
-                  src={image}
-                  alt={`Variant ${index + 1} - Image ${imgIndex + 1}`}
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => onImageRemove(variant.id, imgIndex)}
-                  className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-
-            {/* Uploading Images */}
-            {currentUploadStatuses.map((status, idx) => (
-              <div
-                key={`upload-${idx}`}
-                className="relative aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center"
-              >
-                {status.status === "uploading" && (
-                  <div className="flex flex-col items-center gap-1">
-                    <Spinner className="w-5 h-5 text-blue-600" />
-                    <span className="text-xs text-gray-600">Uploading...</span>
-                  </div>
-                )}
-                {status.status === "error" && (
-                  <div className="p-1 text-center">
-                    <X className="w-4 h-4 text-red-600 mx-auto mb-0.5" />
-                    <span className="text-xs text-red-600 line-clamp-2">
-                      {status.error}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Upload Button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={hasUploadingImages}
-              className={cn(
-                "aspect-square rounded-lg border-2 border-dashed bg-gray-50 flex flex-col items-center justify-center transition-colors",
-                hasUploadingImages
-                  ? "border-gray-300 cursor-not-allowed opacity-50"
-                  : "border-gray-400 hover:border-pink-500 hover:bg-pink-50 cursor-pointer",
-              )}
-            >
-              <Upload className="w-5 h-5 text-gray-400 mb-0.5" />
-              <span className="text-xs text-gray-500">Add</span>
-            </button>
-          </div>
-
-          {variant.images.length === 0 &&
-            currentUploadStatuses.length === 0 && (
-              <p className="text-xs text-red-500">
-                At least one image is required
-              </p>
-            )}
-        </div>
-      </Card>
-    );
-  },
+      />
+    </span>
+    <span className="text-sm font-medium text-gray-800">{label}</span>
+  </button>
 );
 
-VariantCard.displayName = "VariantCard";
+const VariantCard = memo(function VariantCard({
+  variant,
+  category,
+  canRemove,
+  showErrors,
+  sizeDraft,
+  uploadingImages,
+  onUpdate,
+  onRemove,
+  onAddSize,
+  onSizeDraftChange,
+  onUpdateSize,
+  onRemoveSize,
+  onImagesUpload,
+  onImageRemove,
+}: {
+  variant: ColorVariant;
+  category: string;
+  canRemove: boolean;
+  showErrors: boolean;
+  sizeDraft: string;
+  uploadingImages: ImageUploadStatus[];
+  onUpdate: (id: string, updates: Partial<ColorVariant>) => void;
+  onRemove: (id: string) => void;
+  onAddSize: (variantId: string, size: string) => void;
+  onSizeDraftChange: (variantId: string, size: string) => void;
+  onUpdateSize: (variantId: string, sizeId: string, updates: Partial<SizeRow>) => void;
+  onRemoveSize: (variantId: string, sizeId: string) => void;
+  onImagesUpload: (variantId: string, files: FileList) => Promise<void>;
+  onImageRemove: (variantId: string, imageIndex: number) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const colorPickerRef = useRef<HTMLInputElement>(null);
+  const usedSizes = new Set(variant.sizes.map((row) => row.size));
+  const remainingSizes = getSizesForCategory(category).filter(
+    (size) => !usedSizes.has(size),
+  );
+  const hasUploadingImages = uploadingImages.some((item) => item.status === "uploading");
+  const isSaree = isSareeCategory(category);
+  const colorError = getColorError(variant.color, showErrors);
+  const previewColor = previewHex(variant.color);
+  const imagesError =
+    showErrors && variant.images.length === 0 ? "At least one image is required" : "";
+
+  if (!variant.expanded) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className="size-8 shrink-0 rounded-md border border-gray-200"
+              style={{ backgroundColor: previewColor }}
+            />
+            <div className="min-w-0">
+              <p className="truncate text-[15px] font-semibold text-gray-900">
+                {normalizeHex(variant.color) ?? (variant.color || "Untitled color")}
+              </p>
+              <p className="text-sm text-gray-500">
+                {variant.sizes.length} Sizes · {variantStock(variant)} Units
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onRemove(variant.id)}
+              disabled={!canRemove}
+              className="rounded-md p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+              aria-label="Delete color variant"
+            >
+              <Trash2 className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdate(variant.id, { expanded: true })}
+              className="rounded-md p-2 text-gray-500 hover:bg-gray-100"
+              aria-label="Expand color variant"
+            >
+              <ChevronDown className="size-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div className="min-w-[220px] max-w-sm flex-1">
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-slate-500">
+              COLOR DETAILS
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => colorPickerRef.current?.click()}
+                className="size-10 shrink-0 cursor-pointer rounded-lg border border-gray-200"
+                style={{ backgroundColor: previewColor }}
+                aria-label="Open color picker"
+                title="Choose color"
+              />
+              <input
+                ref={colorPickerRef}
+                type="color"
+                value={pickerHex(variant.color)}
+                onChange={(event) =>
+                  onUpdate(variant.id, {
+                    color: event.target.value.toUpperCase(),
+                  })
+                }
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+              <Input
+                value={variant.color}
+                placeholder="Enter color"
+                onChange={(event) =>
+                  onUpdate(variant.id, {
+                    color: sanitizeHexInput(event.target.value),
+                  })
+                }
+                onBlur={() => {
+                  const normalized = normalizeHex(variant.color);
+                  if (normalized) {
+                    onUpdate(variant.id, { color: normalized });
+                  }
+                }}
+                className={cn("h-10 bg-white", colorError && ERROR_COLOR_CLASS)}
+              />
+            </div>
+            <FieldError message={colorError} />
+          </div>
+          <div className="mt-6 hidden items-center gap-8 sm:flex">
+            <div>
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-gray-400">
+                SIZES
+              </p>
+              <p className="text-sm font-medium text-gray-800">
+                {variant.sizes.length} Available
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-gray-400">
+                STOCK
+              </p>
+              <p className="text-sm font-medium text-gray-800">
+                {variantStock(variant)} Units
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onRemove(variant.id)}
+            disabled={!canRemove}
+            className="rounded-md p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+            aria-label="Delete color variant"
+          >
+            <Trash2 className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onUpdate(variant.id, { expanded: false })}
+            className="flex size-8 items-center justify-center rounded-full bg-[#5B8DEF] text-white"
+            aria-label="Collapse color variant"
+          >
+            <ChevronUp className="size-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <p className="mb-3 text-[11px] font-semibold tracking-[0.08em] text-gray-400">
+          VARIANT IMAGES
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ALLOWED_IMAGE_ACCEPT}
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            const files = event.target.files;
+            if (files && files.length > 0) {
+              void onImagesUpload(variant.id, files);
+            }
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+        />
+        <div className="flex flex-wrap gap-3">
+          {variant.images.map((image, imageIndex) => (
+            <div
+              key={`${image}-${imageIndex}`}
+              className="group relative size-[92px] overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
+            >
+              <img
+                src={image}
+                alt={`${variant.color || "Variant"} image ${imageIndex + 1}`}
+                className="size-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => onImageRemove(variant.id, imageIndex)}
+                className="absolute top-1 right-1 rounded-full bg-red-600 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label="Remove image"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+          {uploadingImages.map((item, index) => (
+            <div
+              key={`${item.file.name}-${index}`}
+              className="flex size-[92px] items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50"
+            >
+              {item.status === "uploading" ? (
+                <div className="flex flex-col items-center gap-1">
+                  <Spinner className="size-5 text-blue-600" />
+                  <span className="text-[10px] text-gray-500">Uploading...</span>
+                </div>
+              ) : (
+                <div className="px-1 text-center">
+                  <X className="mx-auto mb-0.5 size-4 text-red-600" />
+                  <span className="line-clamp-2 text-[10px] text-red-600">
+                    {item.error}
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            disabled={hasUploadingImages}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex size-[92px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-[#F7F7F8] text-gray-500 transition-colors hover:border-pink-400 hover:bg-pink-50 disabled:opacity-50"
+          >
+            <Camera className="mb-1 size-5" />
+            <span className="text-xs font-medium">Add Image</span>
+          </button>
+        </div>
+        <FieldError message={imagesError} />
+      </div>
+
+      <div>
+        <p className="mb-3 text-[11px] font-semibold tracking-[0.08em] text-gray-400">
+          INVENTORY & PRICING
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <div className="grid min-w-[640px] grid-cols-[80px_1fr_1fr_1fr_56px] bg-[#F3F4F6] px-4 py-2.5 text-xs font-semibold text-gray-600">
+            <span>Size</span>
+            <span>Quantity</span>
+            <span>Selling Price</span>
+            <span>MRP</span>
+            <span className="text-right">Action</span>
+          </div>
+          {variant.sizes.map((row) => {
+            const quantityError =
+              showErrors && row.quantity === "" ? "Quantity is required" : "";
+            const sellingEmpty =
+              showErrors && row.selling_price === "" ? "Selling price is required" : "";
+            const mrpError =
+              showErrors && row.mrp !== "" && Number(row.mrp) < 0
+                ? "MRP cannot be negative"
+                : "";
+            const priceError = sellingExceedsMrp(row.selling_price, row.mrp)
+              ? "Price > MRP"
+              : sellingEmpty;
+            return (
+              <div
+                key={row.id}
+                className="grid min-w-[640px] grid-cols-[80px_1fr_1fr_1fr_56px] items-start gap-2 border-t border-gray-100 px-4 py-3"
+              >
+                <div className="flex h-10 items-center text-sm font-medium text-gray-800">
+                  {row.size}
+                </div>
+                <div>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={row.quantity}
+                    placeholder="0"
+                    onChange={(event) =>
+                      onUpdateSize(variant.id, row.id, {
+                        quantity: sanitizeDigits(event.target.value),
+                      })
+                    }
+                    className={cn("h-10 bg-white", quantityError && ERROR_COLOR_CLASS)}
+                  />
+                  <FieldError message={quantityError} />
+                </div>
+                <div>
+                  <div className="relative">
+                    <span
+                      className={cn(
+                        "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm",
+                        priceError ? "text-[#B42318]" : "text-gray-500",
+                      )}
+                    >
+                      ₹
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={row.selling_price}
+                      placeholder="0"
+                      onChange={(event) =>
+                        onUpdateSize(variant.id, row.id, {
+                          selling_price: sanitizeDecimal(event.target.value),
+                        })
+                      }
+                      className={cn(
+                        "h-10 bg-white pl-7",
+                        priceError && ERROR_COLOR_CLASS,
+                      )}
+                    />
+                  </div>
+                  <FieldError message={priceError} />
+                </div>
+                <div>
+                  <div className="relative">
+                    <span
+                      className={cn(
+                        "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm",
+                        mrpError ? "text-[#B42318]" : "text-gray-500",
+                      )}
+                    >
+                      ₹
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={row.mrp}
+                      placeholder="0"
+                      onChange={(event) =>
+                        onUpdateSize(variant.id, row.id, {
+                          mrp: sanitizeDecimal(event.target.value),
+                        })
+                      }
+                      className={cn("h-10 bg-white pl-7", mrpError && ERROR_COLOR_CLASS)}
+                    />
+                  </div>
+                  <FieldError message={mrpError} />
+                </div>
+                <div className="flex h-10 items-center justify-end">
+                  {!isSaree && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSize(variant.id, row.id)}
+                      className="rounded-md p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                      aria-label={`Remove size ${row.size}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {!isSaree && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Select
+              value={sizeDraft || undefined}
+              onValueChange={(value) => onSizeDraftChange(variant.id, value)}
+            >
+              <SelectTrigger className="h-10 w-[160px] bg-white">
+                <SelectValue placeholder="Select Size" />
+              </SelectTrigger>
+              <SelectContent>
+                {remainingSizes.length === 0 ? (
+                  <SelectItem value="__none" disabled>
+                    All sizes added
+                  </SelectItem>
+                ) : (
+                  remainingSizes.map((size) => (
+                    <SelectItem key={size} value={size}>
+                      {size}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              onClick={() => onAddSize(variant.id, sizeDraft)}
+              className="h-10 bg-[#EDE7F6] text-[#5B3A9E] hover:bg-[#E4D7F5] hover:text-[#4A2F84]"
+            >
+              + Add Size
+            </Button>
+            <span className="ml-auto text-sm text-gray-500">
+              {variant.sizes.length} size{variant.sizes.length === 1 ? "" : "s"} added
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 const AddEditProductPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditMode = Boolean(id);
   const [hasPopulatedForm, setHasPopulatedForm] = useState(false);
-  const [descriptionError, setDescriptionError] = useState("");
-
-  // Form state
-  const [variants, setVariants] = useState<ProductVariant[]>([
-    {
-      id: crypto.randomUUID(),
-      color: "",
-      sellingPrice: "",
-      mrp: "",
-      sizes: {},
-      images: [],
-    },
+  const [description, setDescription] = useState("");
+  const [isSale, setIsSale] = useState(true);
+  const [isVisible, setIsVisible] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [sizeDrafts, setSizeDrafts] = useState<Record<string, string>>({});
+  const [variants, setVariants] = useState<ColorVariant[]>([
+    createColorVariant("", true),
   ]);
   const [uploadingImages, setUploadingImages] = useState<
     Record<string, ImageUploadStatus[]>
   >({});
-  const [description, setDescription] = useState("");
 
-  const buildInitialVariant = (category: string): ProductVariant => {
-    const sareeFlow = isSareeCategory(category);
-    return {
-      id: crypto.randomUUID(),
-      color: "",
-      sellingPrice: "",
-      mrp: "",
-      sizes: sareeFlow ? { ONE_SIZE: { selected: true, stock: "" } } : {},
-      images: [],
-      sizeDetails: sareeFlow ? "" : undefined,
-      stitchType: "",
-      fabric: "",
-      neckType: "",
-      sleeveType: "",
-      setIncludes: [],
-      workType: [],
-      occasion: [],
-      measurements: {},
-    };
-  };
-
-  // Fetch product by ID when editing
   const {
     data: productResponse,
     isLoading: isLoadingProduct,
@@ -1138,7 +1249,6 @@ const AddEditProductPage = () => {
     queryKey: ["product", id],
     queryFn: async () => {
       const res = await getProductById(id!);
-      console.log('res: ', res);
       return (res as { data?: ProductApiResponse }).data ?? res;
     },
     enabled: isEditMode && Boolean(id),
@@ -1159,11 +1269,11 @@ const AddEditProductPage = () => {
 
   const updateMutation = useMutation({
     mutationFn: ({
-      id: productId,
+      productId,
       payload,
     }: {
-      id: string;
-      payload: Record<string, unknown>;
+      productId: string;
+      payload: ProductFormPayload;
     }) => updateProduct(productId, payload),
     onSuccess: () => {
       showSuccess("Product updated successfully");
@@ -1178,229 +1288,214 @@ const AddEditProductPage = () => {
 
   const form = useForm({
     defaultValues: {
-      productName: "",
-      brand: "",
       category: "",
-      isPreOrder: false,
-      isFeatured: true,
-      pattern: "",
-      sleeveType: "",
+      brand: "",
+      product_name: "",
       fabric: "",
-      neckType: "",
-      description: "",
-      variants: [] as ProductVariant[],
     },
     onSubmit: async ({ value }) => {
-      // Validate description
-      if (!description || description.trim() === "") {
-        showError("Description is required");
-        setDescriptionError("Description is required");
+      setAttemptedSubmit(true);
+
+      if (!value.category) {
+        showError("Category is required");
         return;
       }
-
-      // Validate brand
-      if (!value.brand || value.brand.trim() === "") {
+      if (!value.brand) {
         showError("Brand is required");
         return;
       }
-
-      const sareeFlow = isSareeCategory(value.category);
-      const lehengaFlow = isLehengaFamilyCategory(value.category);
-
-      // Keep existing Saree validation flow unchanged
-      if (sareeFlow) {
-        if (!value.pattern || value.pattern.trim() === "") {
-          showError("Pattern is required");
-          return;
-        }
-        if (!value.fabric || value.fabric.trim() === "") {
-          showError("Fabric is required");
-          return;
-        }
+      if (!value.product_name.trim()) {
+        showError("Product name is required");
+        return;
       }
-
-      // Validate variants
+      if (!value.fabric) {
+        showError("Fabric is required");
+        return;
+      }
+      if (isEmptyHtml(description)) {
+        showError("Description is required");
+        return;
+      }
       if (variants.length === 0) {
-        showError("At least one variant is required");
+        showError("At least one color variant is required");
         return;
       }
 
-      const isSareeFlow = isSareeCategory(value.category);
+      const hasUploadsInProgress = Object.values(uploadingImages).some((items) =>
+        items.some((item) => item.status === "uploading"),
+      );
+      if (hasUploadsInProgress) {
+        showError("Please wait for image uploads to finish");
+        return;
+      }
 
+      const usedColors = new Set<string>();
       for (const variant of variants) {
-        if (!variant.color.trim()) {
-          showError("All variants must have a color");
+        const hex = normalizeHex(variant.color);
+        if (!hex) {
+          showError("Each variant must have a valid HEX color");
           return;
         }
-        if (!variant.sellingPrice || parseFloat(variant.sellingPrice) <= 0) {
-          showError("All variants must have a valid selling price");
+        if (usedColors.has(hex)) {
+          showError(`Color ${hex} is already used on another variant`);
           return;
         }
-        if (!variant.mrp || parseFloat(variant.mrp) <= 0) {
-          showError("All variants must have a valid MRP");
-          return;
-        }
+        usedColors.add(hex);
         if (variant.images.length === 0) {
           showError(`Variant "${variant.color}" must have at least one image`);
           return;
         }
-        
-        // For Saree category, validate ONE_SIZE stock
-        if (isSareeFlow) {
-          const oneSize = variant.sizes["ONE_SIZE"];
-          if (!oneSize || !oneSize.stock || parseInt(oneSize.stock) < 0) {
-            showError(`Variant "${variant.color}" must have valid stock`);
+        if (variant.sizes.length === 0) {
+          showError(`Variant "${variant.color}" must have at least one size`);
+          return;
+        }
+
+        for (const row of variant.sizes) {
+          if (!row.size) {
+            showError(`Variant "${variant.color}" has an incomplete size`);
             return;
           }
-        } else {
-          // For other categories, validate selected sizes
-          const selectedSizes = Object.entries(variant.sizes).filter(
-            ([, data]) => data.selected,
-          );
-          if (selectedSizes.length === 0) {
+          if (row.quantity === "" || Number(row.quantity) < 0) {
             showError(
-              `Variant "${variant.color}" must have at least one size selected`,
+              `Variant "${variant.color}" size ${row.size} must have a valid quantity`,
             );
             return;
           }
-          // Validate stock for selected sizes
-          for (const [size, data] of selectedSizes) {
-            if (!data.stock || parseInt(data.stock) < 0) {
-              showError(
-                `Variant "${variant.color}" size ${size} must have valid stock`,
-              );
-              return;
-            }
-          }
-        }
-
-        if (lehengaFlow) {
-          if (!variant.fabric) {
-            showError(`Variant "${variant.color}" must have fabric selected`);
+          if (row.selling_price === "" || Number(row.selling_price) < 0) {
+            showError(
+              `Variant "${variant.color}" size ${row.size} must have a valid selling price`,
+            );
             return;
           }
-          if (value.category === "Bridal Lehenga") {
-            if (!variant.neckType) {
-              showError(`Variant "${variant.color}" must have neck type selected`);
-              return;
-            }
-            if (!variant.sleeveType) {
-              showError(`Variant "${variant.color}" must have sleeve type selected`);
-              return;
-            }
+          if (row.mrp !== "" && Number(row.mrp) < 0) {
+            showError(
+              `Variant "${variant.color}" size ${row.size} has an invalid MRP`,
+            );
+            return;
+          }
+          if (sellingExceedsMrp(row.selling_price, row.mrp)) {
+            showError(
+              `Variant "${variant.color}" size ${row.size}: selling price cannot exceed MRP`,
+            );
+            return;
           }
         }
       }
 
-      // Prepare payload
-      const allImages = variants.flatMap((v) => v.images);
-
-      // Calculate average price
-      const avgPrice =
-        variants.reduce(
-          (sum, v) => sum + parseFloat(v.sellingPrice || "0"),
-          0,
-        ) / variants.length;
-      
-      const isFeatured =
-        typeof value.isFeatured === "boolean"
-          ? value.isFeatured
-          : (product?.isFeatured ?? false);
-      const isPreOrder =
-        typeof value.isPreOrder === "boolean"
-          ? value.isPreOrder
-          : (product?.isPreOrder ?? false);
-      const lehengaVariantsPayload = variants.map((variant) => ({
-        color: variant.color,
-        sellingPrice: variant.sellingPrice,
-        mrp: variant.mrp,
-        sizes: variant.sizes,
-        images: variant.images,
-        stitchType: variant.stitchType,
-        fabric: variant.fabric,
-        neckType: variant.neckType,
-        sleeveType: variant.sleeveType,
-        setIncludes: variant.setIncludes,
-        workType: variant.workType,
-        occasion: variant.occasion,
-        measurements: variant.measurements,
-      }));
-      const sareeVariantsPayload = variants.map((variant) => ({
-        color: variant.color,
-        sellingPrice: variant.sellingPrice,
-        mrp: variant.mrp,
-        sizes: variant.sizes,
-        images: variant.images,
-      }));
-
-      const basePayload = lehengaFlow
-        ? {
-            productName: value.productName,
-            brand: value.brand,
-            category: value.category,
-            description,
-            isFeatured,
-            variants: lehengaVariantsPayload,
-          }
-        : sareeFlow
-          ? {
-              productName: value.productName,
-              brand: value.brand,
-              category: value.category,
-              fabric: value.fabric,
-              pattern: value.pattern,
-              description,
-              isPreOrder,
-              isFeatured,
-              variants: sareeVariantsPayload,
-            }
-          : {
-            productName: value.productName,
-            brand: value.brand,
-            category: value.category,
-            isFeatured,
-            description,
-            variants,
-            price: lehengaFlow ? undefined : avgPrice,
-            images: allImages,
-          };
-
-      // Console log form values
-      console.log("=== FORM SUBMISSION ===");
-      console.log("Form Values:", basePayload);
-      console.log("======================");
+      const payload = toApiPayload({
+        category: value.category,
+        brand: value.brand,
+        product_name: value.product_name.trim(),
+        fabric: value.fabric,
+        description,
+        is_sale: isSale,
+        is_visible: isVisible,
+        variants,
+      });
 
       if (isEditMode && id) {
-        const cleanedUpdatePayload =
-          (cleanPayloadValue(basePayload) as Record<string, unknown>) ?? {};
-        const finalUpdatePayload = omitPayloadKeys(cleanedUpdatePayload);
-        console.log("updatePayload: ", finalUpdatePayload);
-        updateMutation.mutate({ id, payload: finalUpdatePayload });
-      } else {
-        const cleanedCreatePayload =
-          (cleanPayloadValue(basePayload) as Record<string, unknown>) ?? {};
-        const finalCreatePayload = omitPayloadKeys(cleanedCreatePayload);
-        console.log("createPayload: ", finalCreatePayload);
-        createMutation.mutate(finalCreatePayload);
+        updateMutation.mutate({ productId: id, payload });
+        return;
       }
+
+      createMutation.mutate(payload);
     },
   });
 
-  // Variant handlers
-  const addVariant = () => {
-    setVariants([...variants, buildInitialVariant(form.state.values.category)]);
-  };
+  const selectedCategory = form.state.values.category;
+  const brandOptions = useMemo(() => {
+    const options = [...getBrandsForCategory(selectedCategory)];
+    if (selectedCategory && form.state.values.brand && !options.includes(form.state.values.brand)) {
+      options.unshift(form.state.values.brand);
+    }
+    return options;
+  }, [selectedCategory, form.state.values.brand]);
 
-  const updateVariant = (id: string, updates: Partial<ProductVariant>) => {
+  const handleCategoryChange = (nextCategory: string) => {
+    const currentBrand = form.state.values.brand;
+    form.setFieldValue("category", nextCategory);
+    const nextBrands = getBrandsForCategory(nextCategory);
+    if (currentBrand && !nextBrands.includes(currentBrand)) {
+      form.setFieldValue("brand", "");
+    }
     setVariants((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, ...updates } : v)),
+      prev.map((variant) => applyCategoryToVariant(variant, nextCategory)),
     );
   };
 
-  const removeVariant = (id: string) => {
-    if (variants.length > 1) {
-      setVariants((prev) => prev.filter((v) => v.id !== id));
+  const updateVariant = (variantId: string, updates: Partial<ColorVariant>) => {
+    setVariants((prev) =>
+      prev.map((variant) =>
+        variant.id === variantId ? { ...variant, ...updates } : variant,
+      ),
+    );
+  };
+
+  const addColorVariant = () => {
+    setVariants((prev) => {
+      const next = createColorVariant(form.state.values.category, true);
+      return [...prev.map((variant) => ({ ...variant, expanded: false })), next];
+    });
+  };
+
+  const removeColorVariant = (variantId: string) => {
+    setVariants((prev) => {
+      if (prev.length === 1) return prev;
+      return prev.filter((variant) => variant.id !== variantId);
+    });
+  };
+
+  const addSize = (variantId: string, size: string) => {
+    if (isSareeCategory(form.state.values.category)) return;
+    const allowedSizes = getSizesForCategory(form.state.values.category);
+    if (!size || size === "__none" || !allowedSizes.includes(size)) {
+      showError("Select a size before adding");
+      return;
     }
+
+    setVariants((prev) =>
+      prev.map((variant) => {
+        if (variant.id !== variantId) return variant;
+        if (variant.sizes.some((row) => row.size === size)) {
+          showError(`Size ${size} is already added`);
+          return variant;
+        }
+        return {
+          ...variant,
+          sizes: [...variant.sizes, { ...createSizeRow(), size }],
+        };
+      }),
+    );
+    setSizeDrafts((prev) => ({ ...prev, [variantId]: "" }));
+  };
+
+  const updateSize = (
+    variantId: string,
+    sizeId: string,
+    updates: Partial<SizeRow>,
+  ) => {
+    setVariants((prev) =>
+      prev.map((variant) =>
+        variant.id === variantId
+          ? {
+              ...variant,
+              sizes: variant.sizes.map((row) =>
+                row.id === sizeId ? { ...row, ...updates } : row,
+              ),
+            }
+          : variant,
+      ),
+    );
+  };
+
+  const removeSize = (variantId: string, sizeId: string) => {
+    setVariants((prev) =>
+      prev.map((variant) =>
+        variant.id === variantId
+          ? { ...variant, sizes: variant.sizes.filter((row) => row.id !== sizeId) }
+          : variant,
+      ),
+    );
   };
 
   const handleMultipleImagesUpload = async (
@@ -1408,8 +1503,6 @@ const AddEditProductPage = () => {
     files: FileList,
   ) => {
     const filesArray = Array.from(files);
-
-    // Initialize upload statuses
     const initialStatuses: ImageUploadStatus[] = filesArray.map((file) => ({
       file,
       status: "uploading",
@@ -1420,17 +1513,13 @@ const AddEditProductPage = () => {
       [variantId]: [...(prev[variantId] || []), ...initialStatuses],
     }));
 
-    // Upload all files in order
-    for (let i = 0; i < filesArray.length; i++) {
-      const file = filesArray[i];
+    for (const file of filesArray) {
       const validation = validateImageFile(file);
-
       if (!validation.valid) {
-        // Update status to error
         setUploadingImages((prev) => {
           const updated = [...(prev[variantId] || [])];
           const statusIndex = updated.findIndex(
-            (s) => s.file === file && s.status === "uploading",
+            (item) => item.file === file && item.status === "uploading",
           );
           if (statusIndex !== -1) {
             updated[statusIndex] = {
@@ -1441,44 +1530,36 @@ const AddEditProductPage = () => {
           }
           return { ...prev, [variantId]: updated };
         });
-
-        // Remove error status after 5 seconds
+        showError(validation.error);
         setTimeout(() => {
           setUploadingImages((prev) => ({
             ...prev,
-            [variantId]: (prev[variantId] || []).filter((s) => s.file !== file),
+            [variantId]: (prev[variantId] || []).filter((item) => item.file !== file),
           }));
         }, 5000);
-
         continue;
       }
 
       try {
         const data = await uploadImageToCloudinary(file);
-
-        // Update status to success and add image to variant
         setVariants((prev) =>
-          prev.map((v) =>
-            v.id === variantId
-              ? { ...v, images: [...v.images, data.secure_url] }
-              : v,
+          prev.map((variant) =>
+            variant.id === variantId
+              ? { ...variant, images: [...variant.images, data.secure_url] }
+              : variant,
           ),
         );
-
-        // Remove success status
         setUploadingImages((prev) => ({
           ...prev,
-          [variantId]: (prev[variantId] || []).filter((s) => s.file !== file),
+          [variantId]: (prev[variantId] || []).filter((item) => item.file !== file),
         }));
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Image upload failed";
-
-        // Update status to error
         setUploadingImages((prev) => {
           const updated = [...(prev[variantId] || [])];
           const statusIndex = updated.findIndex(
-            (s) => s.file === file && s.status === "uploading",
+            (item) => item.file === file && item.status === "uploading",
           );
           if (statusIndex !== -1) {
             updated[statusIndex] = {
@@ -1489,12 +1570,11 @@ const AddEditProductPage = () => {
           }
           return { ...prev, [variantId]: updated };
         });
-
-        // Remove error status after 5 seconds
+        showError(message);
         setTimeout(() => {
           setUploadingImages((prev) => ({
             ...prev,
-            [variantId]: (prev[variantId] || []).filter((s) => s.file !== file),
+            [variantId]: (prev[variantId] || []).filter((item) => item.file !== file),
           }));
         }, 5000);
       }
@@ -1503,105 +1583,63 @@ const AddEditProductPage = () => {
 
   const handleImageRemove = (variantId: string, imageIndex: number) => {
     setVariants((prev) =>
-      prev.map((v) =>
-        v.id === variantId
-          ? { ...v, images: v.images.filter((_, i) => i !== imageIndex) }
-          : v,
+      prev.map((variant) =>
+        variant.id === variantId
+          ? {
+              ...variant,
+              images: variant.images.filter((_, index) => index !== imageIndex),
+            }
+          : variant,
       ),
     );
   };
 
-  // Populate form in edit mode
   useEffect(() => {
     if (!product || hasPopulatedForm || !isEditMode) return;
 
-    // Transform API response variants to internal format
-    const transformedVariants: ProductVariant[] = (product.variants ?? []).map(
-      (apiVariant, idx) => {
-      const rawVariant = apiVariant as Record<string, unknown>;
-      const sizesObject = normalizeSizes(apiVariant.sizes, product.category ?? "");
-
-      return {
-        id:
-          apiVariant.variantId ||
-          apiVariant._id ||
-          `variant-${idx}-${crypto.randomUUID()}`,
-        color: toStringValue(apiVariant.color),
-        sellingPrice: toStringValue(apiVariant.sellingPrice),
-        mrp: toStringValue(apiVariant.mrp),
-        sizes: sizesObject,
-        images: Array.isArray(apiVariant.images) ? apiVariant.images : [],
-        sizeDetails: toStringValue(apiVariant.sizeDetails),
-        stitchType:
-          toStringValue(rawVariant.stitchType) ||
-          toStringValue(product.pattern),
-        fabric:
-          toStringValue(rawVariant.fabric) ||
-          toStringValue(product.fabric),
-        neckType:
-          toStringValue(rawVariant.neckType) ||
-          toStringValue(product.neckType),
-        sleeveType:
-          toStringValue(rawVariant.sleeveType) ||
-          toStringValue(product.sleeveType),
-        setIncludes: normalizeStringArray(rawVariant.setIncludes),
-        workType: normalizeStringArray(rawVariant.workType),
-        occasion: normalizeStringArray(rawVariant.occasion),
-        measurements: normalizeMeasurements(rawVariant.measurements),
-      };
-    });
-
-    const formValues = {
-      productName: product.name ?? "",
-      brand: product.brand ?? "",
-      category: product.category ?? "",
-      isPreOrder: product.isPreOrder ?? false,
-      isFeatured: product.isFeatured ?? false,
-      pattern: product.pattern ?? "",
-      sleeveType: product.sleeveType ?? "",
-      fabric: product.fabric ?? "",
-      neckType: product.neckType ?? "",
-      description: product.description ?? "",
-      variants: [],
-    };
-
-    setVariants(transformedVariants);
-    form.setFieldValue("productName", formValues.productName);
-    form.setFieldValue("brand", formValues.brand);
-    form.setFieldValue("isPreOrder", formValues.isPreOrder);
-    form.setFieldValue("isFeatured", formValues.isFeatured);
-    form.setFieldValue("pattern", formValues.pattern);
-    form.setFieldValue("sleeveType", formValues.sleeveType);
-    form.setFieldValue("fabric", formValues.fabric);
-    form.setFieldValue("neckType", formValues.neckType);
-    
+    const nextCategory = normalizeCategory(product.category ?? "");
+    form.setFieldValue("category", nextCategory);
+    form.setFieldValue("brand", product.brand ?? "");
+    form.setFieldValue(
+      "product_name",
+      product.product_name ?? product.name ?? "",
+    );
+    form.setFieldValue("fabric", product.fabric ?? "");
     setDescription(product.description ?? "");
-    form.setFieldValue("category", formValues.category);
+    setIsSale(product.is_sale ?? product.isActive ?? true);
+    setIsVisible(product.is_visible ?? true);
+    setVariants(
+      mapApiProductToVariants(product).map((variant) =>
+        applyCategoryToVariant(variant, nextCategory),
+      ),
+    );
     setHasPopulatedForm(true);
   }, [product, hasPopulatedForm, isEditMode, form]);
 
-  const resetFormForCategory = (nextCategory: string) => {
-    form.setFieldValue("category", nextCategory);
-    form.setFieldValue("productName", "");
-    form.setFieldValue("brand", "");
-    form.setFieldValue("pattern", "");
-    form.setFieldValue("sleeveType", "");
-    form.setFieldValue("fabric", "");
-    form.setFieldValue("neckType", "");
-    form.setFieldValue("description", "");
-    setDescription("");
-    setDescriptionError("");
-    setUploadingImages({});
-    setVariants([buildInitialVariant(nextCategory)]);
-  };
+  const previewVariants = useMemo(
+    () =>
+      variants.map((variant) => ({
+        id: variant.id,
+        color: variant.color,
+        sellingPrice: variant.sizes[0]?.selling_price ?? "",
+        mrp: variant.sizes[0]?.mrp ?? "",
+        images: variant.images,
+        sizes: Object.fromEntries(
+          variant.sizes.map((row) => [
+            row.size || "Size",
+            { selected: true, stock: row.quantity },
+          ]),
+        ),
+      })),
+    [variants],
+  );
 
   if (isEditMode && (isLoadingProduct || (product && !hasPopulatedForm))) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+      <div className="flex h-full items-center justify-center bg-[#F5F6F8]">
         <div className="flex flex-col items-center gap-3">
           <Spinner className="size-8" />
           <p className="text-sm text-gray-600">Loading product data...</p>
-          <p className="text-xs text-gray-500">Please wait while we fetch the product details</p>
         </div>
       </div>
     );
@@ -1609,282 +1647,354 @@ const AddEditProductPage = () => {
 
   if (isEditMode && isProductError) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-3xl mx-auto space-y-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-red-800 font-semibold mb-1">Failed to Load Product</h3>
-                <p className="text-red-600 text-sm">
-                  {(productError as { response?: { data?: { message?: string } } })
-                    ?.response?.data?.message ?? "Unable to fetch product data. The product may not exist or there was a network error."}
-                </p>
-              </div>
-            </div>
+      <div className="h-full overflow-y-auto bg-[#F5F6F8] p-6">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+            <h3 className="mb-1 font-semibold text-red-800">Failed to Load Product</h3>
+            <p className="text-sm text-red-600">
+              {(productError as { response?: { data?: { message?: string } } })
+                ?.response?.data?.message ??
+                "Unable to fetch product data. The product may not exist or there was a network error."}
+            </p>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => navigate("/products")}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Products
-            </Button>
-            <Button variant="outline" onClick={() => window.location.reload()}>
-              Try Again
-            </Button>
-          </div>
+          <Button variant="outline" onClick={() => navigate("/products")}>
+            Back to Products
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex h-full flex-col bg-[#F5F6F8]">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[980px] px-6 pt-6 pb-8">
+          <h1 className="text-[28px] font-bold tracking-tight text-gray-900">
+            {isEditMode ? "Update Product" : "Create New Product"}
+          </h1>
+          <div className="mt-4 border-b border-gray-200" />
 
-      {/* Main Content */}
-      <div className="max-w-[1800px] mx-auto p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4">
-          {/* Left Side - Form */}
-          <div className="space-y-4">
-            {/* Product Details Card */}
-            <Card className="p-4 bg-white">
-              <h2 className="text-base font-semibold text-gray-900 mb-3">
-                Product Details
+          <form
+            className="mt-6 space-y-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void form.handleSubmit();
+            }}
+          >
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+              <h2 className="mb-5 text-lg font-semibold text-gray-900">
+                Product Information
               </h2>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  form.handleSubmit();
-                }}
-              >
-                <FieldGroup className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <form.Field name="category" validators={{ onChange: z.string().min(1, "Category is required").trim() }}>
-                        {(field) => (
-                          <Field data-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}>
-                            <FieldLabel htmlFor="category" className="text-xs">Category <span className="text-red-500">*</span></FieldLabel>
-                            <Select
-                              value={field.state.value}
-                              onValueChange={(value) => {
-                                if (value === field.state.value) return;
-                                resetFormForCategory(value);
-                                field.handleBlur();
-                              }}
-                            >
-                              <SelectTrigger className="h-8 text-sm">
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Lehenga">Lehenga</SelectItem>
-                                <SelectItem value="Bridal Lehenga">Bridal Lehenga</SelectItem>
-                                <SelectItem value="Rajputi Poshak">Rajputi Poshak</SelectItem>
-                                <SelectItem value="Saree">Saree</SelectItem>
-                                <SelectItem value="Banarasi Sarees">Banarasi Sarees</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                        )}
-                      </form.Field>
-                    </div>
+              <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
+                <form.Field
+                  name="category"
+                  validators={{
+                    onChange: z.string().min(1, "Category is required"),
+                  }}
+                >
+                  {(field) => {
+                    const error =
+                      (attemptedSubmit || field.state.meta.isTouched) &&
+                      !field.state.value
+                        ? "Category is required"
+                        : "";
+                    return (
+                    <Field data-invalid={Boolean(error)}>
+                      <FieldLabel className="mb-1.5 text-sm font-medium text-gray-800">
+                        Category <span className="text-red-500">*</span>
+                      </FieldLabel>
+                      <Select
+                        value={field.state.value || undefined}
+                        onValueChange={(value) => {
+                          handleCategoryChange(value);
+                          field.handleBlur();
+                        }}
+                      >
+                        <SelectTrigger className={cn("h-11 bg-white", error && ERROR_COLOR_CLASS)}>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORY_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FieldError message={error} />
+                    </Field>
+                    );
+                  }}
+                </form.Field>
 
-                    <div className="space-y-1">
-                      <form.Field name="productName" validators={{ onChange: z.string().min(1, "Product name is required").trim() }}>
-                        {(field) => (
-                          <Field data-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}>
-                            <FieldLabel htmlFor="productName" className="text-xs">Product Name <span className="text-red-500">*</span></FieldLabel>
-                            <Input
-                              id="productName"
-                              placeholder="Parika"
-                              value={field.state.value}
-                              onChange={(e) => field.handleChange(e.target.value)}
-                              onBlur={field.handleBlur}
-                              className="h-8 text-sm"
-                            />
-                          </Field>
-                        )}
-                      </form.Field>
-                    </div>
-                  </div>
+                <form.Field
+                  name="brand"
+                  validators={{
+                    onChange: z.string().min(1, "Brand is required"),
+                  }}
+                >
+                  {(field) => {
+                    const error =
+                      (attemptedSubmit || field.state.meta.isTouched) &&
+                      !field.state.value
+                        ? "Brand is required"
+                        : "";
+                    return (
+                    <Field data-invalid={Boolean(error)}>
+                      <FieldLabel className="mb-1.5 text-sm font-medium text-gray-800">
+                        Brand <span className="text-red-500">*</span>
+                      </FieldLabel>
+                      <Select
+                        value={field.state.value || undefined}
+                        onValueChange={(value) => field.handleChange(value)}
+                        disabled={!selectedCategory}
+                      >
+                        <SelectTrigger className={cn("h-11 bg-white", error && ERROR_COLOR_CLASS)}>
+                          <SelectValue placeholder="Select brand" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {brandOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FieldError message={error} />
+                    </Field>
+                    );
+                  }}
+                </form.Field>
 
-                  {form.state.values.category && (
-                    <>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <form.Field name="brand" validators={{ onChange: z.string().min(1, "Brand is required").trim() }}>
-                            {(field) => (
-                              <Field data-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}>
-                                <FieldLabel htmlFor="brand" className="text-xs">Brand <span className="text-red-500">*</span></FieldLabel>
-                                <Input id="brand" placeholder="Brand" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} className="h-8 text-sm" />
-                              </Field>
-                            )}
-                          </form.Field>
-                        </div>
-                      </div>
+                <form.Field
+                  name="product_name"
+                  validators={{
+                    onChange: z.string().min(1, "Product name is required").trim(),
+                  }}
+                >
+                  {(field) => {
+                    const error =
+                      (attemptedSubmit || field.state.meta.isTouched) &&
+                      !field.state.value.trim()
+                        ? "Product name is required"
+                        : "";
+                    return (
+                    <Field data-invalid={Boolean(error)}>
+                      <FieldLabel className="mb-1.5 text-sm font-medium text-gray-800">
+                        Product Name <span className="text-red-500">*</span>
+                      </FieldLabel>
+                      <Input
+                        value={field.state.value}
+                        placeholder="Enter product name"
+                        onChange={(event) => field.handleChange(event.target.value)}
+                        onBlur={field.handleBlur}
+                        className={cn("h-11 bg-white", error && ERROR_COLOR_CLASS)}
+                      />
+                      <FieldError message={error} />
+                    </Field>
+                    );
+                  }}
+                </form.Field>
 
-                      {isSareeCategory(form.state.values.category) && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <form.Field name="pattern">
-                              {(field) => (
-                                <Field>
-                                  <FieldLabel className="text-xs">Pattern <span className="text-red-500">*</span></FieldLabel>
-                                  <Select value={field.state.value} onValueChange={(value) => field.handleChange(value)}>
-                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select pattern" /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="solid">Solid</SelectItem>
-                                      <SelectItem value="printed">Printed</SelectItem>
-                                      <SelectItem value="embroidered">Embroidered</SelectItem>
-                                      <SelectItem value="striped">Striped</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </Field>
-                              )}
-                            </form.Field>
-                          </div>
-                          <div />
-                        </div>
-                      )}
+                <form.Field
+                  name="fabric"
+                  validators={{
+                    onChange: z.string().min(1, "Fabric is required"),
+                  }}
+                >
+                  {(field) => {
+                    const error =
+                      (attemptedSubmit || field.state.meta.isTouched) &&
+                      !field.state.value
+                        ? "Fabric is required"
+                        : "";
+                    return (
+                    <Field data-invalid={Boolean(error)}>
+                      <FieldLabel className="mb-1.5 text-sm font-medium text-gray-800">
+                        Fabric <span className="text-red-500">*</span>
+                      </FieldLabel>
+                      <Select
+                        value={field.state.value || undefined}
+                        onValueChange={(value) => field.handleChange(value)}
+                      >
+                        <SelectTrigger className={cn("h-11 bg-white", error && ERROR_COLOR_CLASS)}>
+                          <SelectValue placeholder="Select fabric" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FABRIC_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FieldError message={error} />
+                    </Field>
+                    );
+                  }}
+                </form.Field>
+              </div>
 
-                      {isSareeCategory(form.state.values.category) && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <form.Field name="fabric">
-                              {(field) => (
-                                <Field>
-                                  <FieldLabel className="text-xs">Fabric <span className="text-red-500">*</span></FieldLabel>
-                                  <Select value={field.state.value} onValueChange={(value) => field.handleChange(value)}>
-                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select fabric" /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="cotton">Cotton</SelectItem>
-                                      <SelectItem value="silk">Silk</SelectItem>
-                                      <SelectItem value="georgette">Georgette</SelectItem>
-                                      <SelectItem value="chiffon">Chiffon</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </Field>
-                              )}
-                            </form.Field>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-1">
-                        <FieldLabel htmlFor="description" className="text-xs">
-                          Description <span className="text-red-500">*</span>
-                        </FieldLabel>
-                        <div className={cn("border rounded-lg overflow-hidden min-h-[180px]", descriptionError ? "border-red-500" : "border-gray-300")}>
-                          <Suspense
-                            fallback={
-                              <div className="min-h-[180px] flex items-center justify-center bg-white">
-                                <Spinner className="size-6" />
-                              </div>
-                            }
-                          >
-                            <ProductDescriptionEditor
-                              value={description}
-                              onChange={(next) => {
-                                setDescription(next);
-                                if (next && next.trim()) setDescriptionError("");
-                              }}
-                            />
-                          </Suspense>
-                        </div>
-                        {descriptionError && <p className="text-xs text-red-500">{descriptionError}</p>}
-                      </div>
-                    </>
+              <div className="mt-5">
+                <FieldLabel className="mb-1.5 text-sm font-medium text-gray-800">
+                  Description
+                </FieldLabel>
+                <div
+                  className={cn(
+                    "overflow-hidden rounded-lg border bg-white",
+                    attemptedSubmit && isEmptyHtml(description)
+                      ? "border-2 border-[#B42318]"
+                      : "border-gray-300",
                   )}
-                </FieldGroup>
-              </form>
-            </Card>
-
-            {/* Variants Section - Only show after category selection */}
-            {form.state.values.category && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-gray-900">
-                    Variants ({variants.length})
-                  </h2>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="bg-white hover:bg-gray-50 text-pink-600 border-pink-300 h-8 text-sm"
-                    onClick={addVariant}
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1.5" />
-                    Add Variant
-                  </Button>
+                >
+                  <ProductRichTextEditor
+                    value={description}
+                    onChange={setDescription}
+                  />
                 </div>
+                <FieldError
+                  message={
+                    attemptedSubmit && isEmptyHtml(description)
+                      ? "Description is required"
+                      : ""
+                  }
+                />
+              </div>
+            </section>
 
-                {variants.map((variant, index) => (
+            <section>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Product Variants
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Manage images, pricing, and inventory for each color variant.
+              </p>
+              <div className="mt-4 space-y-4">
+                {variants.map((variant) => (
                   <VariantCard
                     key={variant.id}
                     variant={variant}
-                    index={index}
-                    productName={form.state.values.productName}
-                    category={form.state.values.category}
+                    category={selectedCategory}
+                    canRemove={variants.length > 1}
+                    showErrors={attemptedSubmit}
+                    sizeDraft={sizeDrafts[variant.id] ?? ""}
+                    uploadingImages={uploadingImages[variant.id] || []}
                     onUpdate={updateVariant}
-                    onRemove={removeVariant}
-                    onMultipleImagesUpload={handleMultipleImagesUpload}
+                    onRemove={removeColorVariant}
+                    onAddSize={addSize}
+                    onSizeDraftChange={(variantId, size) =>
+                      setSizeDrafts((prev) => ({ ...prev, [variantId]: size }))
+                    }
+                    onUpdateSize={updateSize}
+                    onRemoveSize={removeSize}
+                    onImagesUpload={handleMultipleImagesUpload}
                     onImageRemove={handleImageRemove}
-                    uploadingImages={uploadingImages}
                   />
                 ))}
               </div>
-            )}
-
-            {/* Show message when no category selected */}
-            {!form.state.values.category && (
-              <Card className="p-8 bg-gray-50 border-2 border-dashed border-gray-300">
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gray-200 flex items-center justify-center">
-                    <ShoppingBag className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-1">
-                    Select a Category First
-                  </h3>
-                  <p className="text-xs text-gray-500">
-                    Please select a category above to start adding product variants
-                  </p>
-                </div>
-              </Card>
-            )}
-
-            {/* Save Product Button (bottom) */}
-            <Card className="p-4 bg-white flex justify-end">
               <Button
                 type="button"
-                onClick={() => form.handleSubmit()}
-                disabled={mutation.isPending}
-                className="bg-pink-600 hover:bg-pink-700 text-white px-8 h-9 text-sm"
+                onClick={addColorVariant}
+                className="mt-4 h-12 w-full bg-[#E91E63] text-base font-semibold text-white hover:bg-[#D81B60]"
               >
-                {mutation.isPending ? (
-                  <>
-                    <Spinner className="mr-2 size-3.5" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Product"
-                )}
+                <Plus className="size-4" />
+                Add Color Variant
               </Button>
-            </Card>
-          </div>
+            </section>
 
-          {/* Right Side - Live Preview */}
-          <div className="hidden lg:block">
-            <ProductPreview
-              productName={form.state.values.productName}
-              brand={form.state.values.brand}
-              category={form.state.values.category}
-              description={description}
-              variants={variants}
-            />
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 bg-[#F3F4F6] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      List for Sale
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Make this product available for purchase across all enabled
+                      sales channels.
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    checked={isSale}
+                    onChange={setIsSale}
+                    label={isSale ? "Active" : "Inactive"}
+                  />
+                </div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-[#F3F4F6] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Website Visibility
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Control whether this product is visible to customers on your
+                      storefront.
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    checked={isVisible}
+                    onChange={setIsVisible}
+                    label={isVisible ? "Visible" : "Hidden"}
+                  />
+                </div>
+              </div>
+            </section>
+          </form>
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 bg-white px-6 py-4">
+        <div className="mx-auto flex w-full max-w-[980px] items-center justify-between gap-3">
+          <Button
+            type="button"
+            onClick={() => navigate("/products")}
+            className="h-10 bg-[#2F2F2F] px-6 text-white hover:bg-black"
+          >
+            Back
+          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              className="h-10 bg-[#2F2F2F] px-5 text-white hover:bg-black"
+            >
+              <Eye className="size-4" />
+              Preview Product
+            </Button>
+            <Button
+              type="button"
+              disabled={mutation.isPending}
+              onClick={() => void form.handleSubmit()}
+              className="h-10 bg-[#E91E63] px-6 font-semibold text-white hover:bg-[#D81B60]"
+            >
+              {mutation.isPending ? (
+                <>
+                  <Spinner className="size-4" />
+                  Saving...
+                </>
+              ) : (
+                "Save Product"
+              )}
+            </Button>
           </div>
         </div>
       </div>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Product Preview</DialogTitle>
+          </DialogHeader>
+          <ProductPreview
+            productName={form.state.values.product_name}
+            brand={form.state.values.brand}
+            category={form.state.values.category}
+            description={description}
+            variants={previewVariants}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
