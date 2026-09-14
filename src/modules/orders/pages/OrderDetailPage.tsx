@@ -35,6 +35,7 @@ interface OrderDetailApi {
   shiprocketShipmentId?: string | null;
   awbCode?: string | null;
   courierName?: string | null;
+  awbError?: string | null;
 }
 
 interface TrackingActivity {
@@ -50,6 +51,7 @@ interface TrackingResponse {
   courierName?: string | null;
   shiprocketOrderId?: string | null;
   shiprocketShipmentId?: string | null;
+  awbError?: string | null;
   trackingData?: {
     current_status?: string;
     etd?: string;
@@ -363,6 +365,11 @@ const OrderDetailPage = () => {
                       </button>
                     )}
                   </div>
+                  {!order.awbCode && order.awbError && (
+                    <p className="mt-1 text-xs text-red-600 leading-snug">
+                      {order.awbError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-gray-400 mb-0.5">Courier</p>
