@@ -73,7 +73,7 @@ import {
   updateProduct,
 } from "@/http/Services/all";
 import { showError, showSuccess } from "@/utility/utility";
-import { uploadImage } from "@/lib/uploads";
+import { uploadImage, uploadMedia } from "@/lib/uploads";
 import ProductPreview from "./ProductPreview";
 
 type CategorySlug =
@@ -167,8 +167,23 @@ const ERROR_COLOR_CLASS =
   "border-2 border-[#B42318] text-[#B42318] focus-visible:border-[#B42318] focus-visible:ring-[#B42318]/20";
 
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"] as const;
-const ALLOWED_IMAGE_ACCEPT = ".jpg,.jpeg,.png";
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+] as const;
+const ALLOWED_VIDEO_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-m4v",
+] as const;
+const ALLOWED_MEDIA_ACCEPT =
+  ".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov,.m4v,image/*,video/*";
+const VIDEO_URL_PATTERN = /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i;
 
 const HEX_PATTERN = /^#([0-9A-Fa-f]{6})$/;
 const DEFAULT_PREVIEW_HEX = "#94A3B8";
@@ -185,12 +200,13 @@ interface SizeRow {
 interface ColorVariant {
   id: string;
   color: string;
+  /** Media URLs (images + videos). API field remains `images`. */
   images: string[];
   sizes: SizeRow[];
   expanded: boolean;
 }
 
-interface ImageUploadStatus {
+interface MediaUploadStatus {
   file: File;
   status: "uploading" | "success" | "error";
   error?: string;
@@ -588,26 +604,67 @@ const getColorError = (color: string, showErrors: boolean): string => {
   return "";
 };
 
-const validateImageFile = (
+const isVideoFile = (file: File): boolean => file.type.startsWith("video/");
+
+const isImageFile = (file: File): boolean => file.type.startsWith("image/");
+
+const isVideoMediaUrl = (url: string): boolean => {
+  if (!url) return false;
+  try {
+    const pathname = new URL(url, window.location.origin).pathname;
+    return VIDEO_URL_PATTERN.test(pathname);
+  } catch {
+    return VIDEO_URL_PATTERN.test(url);
+  }
+};
+
+const validateMediaFile = (
   file: File,
 ): { valid: true } | { valid: false; error: string } => {
-  if (
-    !ALLOWED_IMAGE_TYPES.includes(
-      file.type as (typeof ALLOWED_IMAGE_TYPES)[number],
-    )
-  ) {
-    return {
-      valid: false,
-      error: `Invalid file type "${file.name}". Only JPG, JPEG, and PNG images are allowed.`,
-    };
+  if (isImageFile(file)) {
+    if (
+      !ALLOWED_IMAGE_TYPES.includes(
+        file.type as (typeof ALLOWED_IMAGE_TYPES)[number],
+      )
+    ) {
+      return {
+        valid: false,
+        error: `Invalid image type "${file.name}". Allowed: JPG, JPEG, PNG, WEBP, GIF.`,
+      };
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      return {
+        valid: false,
+        error: `Image "${file.name}" is too large. Maximum size is 5 MB.`,
+      };
+    }
+    return { valid: true };
   }
-  if (file.size > MAX_IMAGE_SIZE_BYTES) {
-    return {
-      valid: false,
-      error: `File "${file.name}" is too large. Maximum size is 5 MB.`,
-    };
+
+  if (isVideoFile(file)) {
+    if (
+      !ALLOWED_VIDEO_TYPES.includes(
+        file.type as (typeof ALLOWED_VIDEO_TYPES)[number],
+      )
+    ) {
+      return {
+        valid: false,
+        error: `Invalid video type "${file.name}". Allowed: MP4, WEBM, MOV, M4V.`,
+      };
+    }
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      return {
+        valid: false,
+        error: `Video "${file.name}" is too large. Maximum size is 50 MB.`,
+      };
+    }
+    return { valid: true };
   }
-  return { valid: true };
+
+  return {
+    valid: false,
+    error: `Invalid file type "${file.name}". Only images and videos are allowed.`,
+  };
 };
 
 const sellingExceedsMrp = (sellingPrice: string, mrp: string): boolean => {
@@ -779,7 +836,7 @@ const VariantCard = memo(function VariantCard({
   canRemove: boolean;
   showErrors: boolean;
   sizeDraft: string;
-  uploadingImages: ImageUploadStatus[];
+  uploadingImages: MediaUploadStatus[];
   onUpdate: (id: string, updates: Partial<ColorVariant>) => void;
   onRemove: (id: string) => void;
   onAddSize: (variantId: string, size: string) => void;
@@ -800,7 +857,9 @@ const VariantCard = memo(function VariantCard({
   const colorError = getColorError(variant.color, showErrors);
   const previewColor = previewHex(variant.color);
   const imagesError =
-    showErrors && variant.images.length === 0 ? "At least one image is required" : "";
+    showErrors && variant.images.length === 0
+      ? "At least one image or video is required"
+      : "";
 
   if (!variant.expanded) {
     return (
@@ -935,12 +994,12 @@ const VariantCard = memo(function VariantCard({
 
       <div className="mb-6">
         <p className="mb-3 text-[11px] font-semibold tracking-[0.08em] text-gray-400">
-          VARIANT IMAGES
+          VARIANT MEDIA
         </p>
         <input
           ref={fileInputRef}
           type="file"
-          accept={ALLOWED_IMAGE_ACCEPT}
+          accept={ALLOWED_MEDIA_ACCEPT}
           multiple
           className="hidden"
           onChange={(event) => {
@@ -952,26 +1011,40 @@ const VariantCard = memo(function VariantCard({
           }}
         />
         <div className="flex flex-wrap gap-3">
-          {variant.images.map((image, imageIndex) => (
-            <div
-              key={`${image}-${imageIndex}`}
-              className="group relative size-[92px] overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-            >
-              <img
-                src={image}
-                alt={`${variant.color || "Variant"} image ${imageIndex + 1}`}
-                className="size-full object-cover"
-              />
-              <button
-                type="button"
-                onClick={() => onImageRemove(variant.id, imageIndex)}
-                className="absolute top-1 right-1 rounded-full bg-red-600 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                aria-label="Remove image"
+          {variant.images.map((mediaUrl, mediaIndex) => {
+            const isVideo = isVideoMediaUrl(mediaUrl);
+            return (
+              <div
+                key={`${mediaUrl}-${mediaIndex}`}
+                className="group relative size-[92px] overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
               >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
+                {isVideo ? (
+                  <video
+                    src={mediaUrl}
+                    controls
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <img
+                    src={mediaUrl}
+                    alt={`${variant.color || "Variant"} media ${mediaIndex + 1}`}
+                    className="size-full object-cover"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => onImageRemove(variant.id, mediaIndex)}
+                  className="absolute top-1 right-1 rounded-full bg-red-600 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  aria-label={isVideo ? "Remove video" : "Remove image"}
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            );
+          })}
           {uploadingImages.map((item, index) => (
             <div
               key={`${item.file.name}-${index}`}
@@ -999,9 +1072,12 @@ const VariantCard = memo(function VariantCard({
             className="flex size-[92px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-[#F7F7F8] text-gray-500 transition-colors hover:border-pink-400 hover:bg-pink-50 disabled:opacity-50"
           >
             <Camera className="mb-1 size-5" />
-            <span className="text-xs font-medium">Add Image</span>
+            <span className="text-xs font-medium">Add Media</span>
           </button>
         </div>
+        <p className="mt-2 text-xs text-gray-400">
+          Images (JPG, PNG, WEBP) up to 5 MB · Videos (MP4, WEBM, MOV) up to 50 MB
+        </p>
         <FieldError message={imagesError} />
       </div>
 
@@ -1177,7 +1253,7 @@ const NewAddUpdateProduct = () => {
     createColorVariant("", true),
   ]);
   const [uploadingImages, setUploadingImages] = useState<
-    Record<string, ImageUploadStatus[]>
+    Record<string, MediaUploadStatus[]>
   >({});
 
   const {
@@ -1265,7 +1341,7 @@ const NewAddUpdateProduct = () => {
         items.some((item) => item.status === "uploading"),
       );
       if (hasUploadsInProgress) {
-        showError("Please wait for image uploads to finish");
+        showError("Please wait for media uploads to finish");
         return;
       }
 
@@ -1282,7 +1358,7 @@ const NewAddUpdateProduct = () => {
         }
         usedColors.add(hex);
         if (variant.images.length === 0) {
-          showError(`Variant "${variant.color}" must have at least one image`);
+          showError(`Variant "${variant.color}" must have at least one image or video`);
           return;
         }
         if (variant.sizes.length === 0) {
@@ -1443,7 +1519,7 @@ const NewAddUpdateProduct = () => {
     files: FileList,
   ) => {
     const filesArray = Array.from(files);
-    const initialStatuses: ImageUploadStatus[] = filesArray.map((file) => ({
+    const initialStatuses: MediaUploadStatus[] = filesArray.map((file) => ({
       file,
       status: "uploading",
     }));
@@ -1454,7 +1530,7 @@ const NewAddUpdateProduct = () => {
     }));
 
     for (const file of filesArray) {
-      const validation = validateImageFile(file);
+      const validation = validateMediaFile(file);
       if (!validation.valid) {
         setUploadingImages((prev) => {
           const updated = [...(prev[variantId] || [])];
@@ -1481,11 +1557,11 @@ const NewAddUpdateProduct = () => {
       }
 
       try {
-        const imageUrl = await uploadImage(file);
+        const mediaUrl = await uploadMedia(file);
         setVariants((prev) =>
           prev.map((variant) =>
             variant.id === variantId
-              ? { ...variant, images: [...variant.images, imageUrl] }
+              ? { ...variant, images: [...variant.images, mediaUrl] }
               : variant,
           ),
         );
@@ -1495,7 +1571,7 @@ const NewAddUpdateProduct = () => {
         }));
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Image upload failed";
+          err instanceof Error ? err.message : "Media upload failed";
         setUploadingImages((prev) => {
           const updated = [...(prev[variantId] || [])];
           const statusIndex = updated.findIndex(
@@ -1807,7 +1883,7 @@ const NewAddUpdateProduct = () => {
                 Product Variants
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Manage images, pricing, and inventory for each color variant.
+                Manage images, videos, pricing, and inventory for each color variant.
               </p>
               <div className="mt-4 space-y-4">
                 {variants.map((variant) => (
