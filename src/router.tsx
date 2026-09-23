@@ -24,9 +24,9 @@ const ProductLayout = lazy(
 const ProductListPage = lazy(
   () => import("./modules/products/pages/ProductsListPage"),
 );
-const AddEditProductPage = lazy(
-  () => import("./modules/products/pages/AddEditProductPage"),
-);
+// const AddEditProductPage = lazy(
+//   () => import("./modules/products/pages/AddEditProductPage"),
+// );
 const NewAddUpdateProduct = lazy(
   () => import("./modules/products/pages/NewAddUpdateProduct"),
 );
