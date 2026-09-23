@@ -310,6 +310,7 @@ const toPersistedId = (value: unknown): string | undefined => {
 const sanitizeDigits = (raw: string): string => raw.replace(/\D/g, "");
 
 const sanitizeDecimal = (raw: string): string => {
+  console.log('called..')
   const cleaned = raw.replace(/[^\d.]/g, "");
   const [whole, ...rest] = cleaned.split(".");
   if (rest.length === 0) return whole;
