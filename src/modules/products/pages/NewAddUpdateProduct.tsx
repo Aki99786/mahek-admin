@@ -191,6 +191,8 @@ const DEFAULT_PICKER_HEX = "#000000";
 
 interface SizeRow {
   id: string;
+  /** Persisted API ID. Omitted for sizes created in this form session. */
+  sizeId?: string;
   size: string;
   quantity: string;
   selling_price: string;
@@ -199,6 +201,8 @@ interface SizeRow {
 
 interface ColorVariant {
   id: string;
+  /** Persisted API ID. Omitted for variants created in this form session. */
+  variantId?: string;
   color: string;
   /** Media URLs (images + videos). API field remains `images`. */
   images: string[];
@@ -213,6 +217,7 @@ interface MediaUploadStatus {
 }
 
 interface ProductSizePayload {
+  size_id?: string;
   size: string;
   quantity: number;
   selling_price: number;
@@ -220,6 +225,7 @@ interface ProductSizePayload {
 }
 
 interface ProductVariantPayload {
+  variant_id?: string;
   color: string;
   images: string[];
   sizes: ProductSizePayload[];
@@ -255,9 +261,15 @@ interface ProductApiResponse {
   isActive?: boolean;
   status?: string;
   product_variants?: Array<{
+    _id?: string;
+    id?: string;
+    variant_id?: string;
     color?: string;
     images?: string[];
     sizes?: Array<{
+      _id?: string;
+      id?: string;
+      size_id?: string;
       size?: string;
       quantity?: number | string;
       selling_price?: number | string;
@@ -265,12 +277,22 @@ interface ProductApiResponse {
     }>;
   }>;
   variants?: Array<{
+    _id?: string;
+    id?: string;
+    variant_id?: string;
     color?: string;
     images?: string[];
     sellingPrice?: number | string;
     mrp?: number | string;
     sizes?:
-      | Array<{ size?: string; stock?: number | string; quantity?: number | string }>
+      | Array<{
+          _id?: string;
+          id?: string;
+          size_id?: string;
+          size?: string;
+          stock?: number | string;
+          quantity?: number | string;
+        }>
       | Record<string, { stock?: number | string; selected?: boolean } | number | string>;
   }>;
 }
@@ -278,6 +300,11 @@ interface ProductApiResponse {
 const toStringValue = (value: unknown): string => {
   if (value === null || value === undefined) return "";
   return String(value);
+};
+
+const toPersistedId = (value: unknown): string | undefined => {
+  const id = toStringValue(value).trim();
+  return id || undefined;
 };
 
 const sanitizeDigits = (raw: string): string => raw.replace(/\D/g, "");
@@ -683,11 +710,13 @@ const mapApiProductToVariants = (product: ProductApiResponse): ColorVariant[] =>
   if (Array.isArray(product.product_variants) && product.product_variants.length > 0) {
     return product.product_variants.map((variant, index) => ({
       id: `variant-${index}-${crypto.randomUUID()}`,
+      variantId: toPersistedId(variant._id ?? variant.id ?? variant.variant_id),
       color: toStringValue(variant.color),
       images: Array.isArray(variant.images) ? variant.images : [],
       expanded: index === 0,
       sizes: (variant.sizes ?? []).map((size) => ({
         id: crypto.randomUUID(),
+        sizeId: toPersistedId(size._id ?? size.id ?? size.size_id),
         size: toStringValue(size.size),
         quantity: toStringValue(size.quantity),
         selling_price: toStringValue(size.selling_price),
@@ -706,6 +735,7 @@ const mapApiProductToVariants = (product: ProductApiResponse): ColorVariant[] =>
         sizeRows = variant.sizes
           .map((item) => ({
             id: crypto.randomUUID(),
+            sizeId: toPersistedId(item._id ?? item.id ?? item.size_id),
             size: toStringValue(item.size),
             quantity: toStringValue(item.quantity ?? item.stock),
             selling_price: sellingPrice,
@@ -735,6 +765,7 @@ const mapApiProductToVariants = (product: ProductApiResponse): ColorVariant[] =>
 
       return {
         id: `variant-${index}-${crypto.randomUUID()}`,
+        variantId: toPersistedId(variant._id ?? variant.id ?? variant.variant_id),
         color: toStringValue(variant.color),
         images: Array.isArray(variant.images) ? variant.images : [],
         expanded: index === 0,
@@ -780,16 +811,32 @@ const toApiPayload = ({
   is_trending_collection,
   status: is_sale ? "active" : "inactive",
   is_delete: false,
-  product_variants: variants.map((variant) => ({
-    color: normalizeHex(variant.color) ?? variant.color.trim().toUpperCase(),
-    images: variant.images,
-    sizes: variant.sizes.map((row) => ({
-      size: row.size,
-      quantity: Number(row.quantity),
-      selling_price: Number(row.selling_price),
-      mrp: row.mrp === "" ? 0 : Number(row.mrp),
-    })),
-  })),
+  product_variants: variants.map((variant) => {
+    const payload: ProductVariantPayload = {
+      color: normalizeHex(variant.color) ?? variant.color.trim().toUpperCase(),
+      images: variant.images,
+      sizes: variant.sizes.map((row) => {
+        const sizePayload: ProductSizePayload = {
+          size: row.size,
+          quantity: Number(row.quantity),
+          selling_price: Number(row.selling_price),
+          mrp: row.mrp === "" ? 0 : Number(row.mrp),
+        };
+
+        if (row.sizeId) {
+          sizePayload.size_id = row.sizeId;
+        }
+
+        return sizePayload;
+      }),
+    };
+
+    if (variant.variantId) {
+      payload.variant_id = variant.variantId;
+    }
+
+    return payload;
+  }),
 });
 
 const ToggleSwitch = ({

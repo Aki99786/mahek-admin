@@ -49,6 +49,8 @@ interface Product {
   description: string;
   is_sale: boolean;
   is_visible: boolean;
+  is_reel_collection?: boolean | null;
+  is_trending_collection?: boolean | null;
   status: string;
   is_delete: boolean;
   createdAt?: string;
@@ -57,6 +59,89 @@ interface Product {
 }
 
 const FALLBACK_IMAGE = "https://via.placeholder.com/400";
+const FALLBACK_IMAGE_WITH_LABEL = "https://via.placeholder.com/400?text=No+Media";
+const VIDEO_URL_PATTERN = /\.(mp4|webm|mov|m4v|ogg|ogv)(\?|#|$)/i;
+
+const isVideoMediaUrl = (url: string): boolean => {
+  if (!url) return false;
+
+  try {
+    return VIDEO_URL_PATTERN.test(new URL(url, window.location.origin).pathname);
+  } catch {
+    return VIDEO_URL_PATTERN.test(url);
+  }
+};
+
+const ProductMedia = ({
+  src,
+  alt,
+}: {
+  src?: string;
+  alt: string;
+}) => {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [hasError, setHasError] = React.useState(false);
+  const mediaUrl = src?.trim();
+  const isVideo = Boolean(mediaUrl && isVideoMediaUrl(mediaUrl));
+
+  React.useEffect(() => {
+    setHasError(false);
+  }, [mediaUrl]);
+
+  const handleVideoEnter = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    void video.play().catch(() => undefined);
+  };
+
+  const handleVideoLeave = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    video.currentTime = 0;
+  };
+
+  if (!mediaUrl || hasError) {
+    return (
+      <img
+        src={FALLBACK_IMAGE_WITH_LABEL}
+        alt={`${alt} media unavailable`}
+        className="h-full w-full object-contain p-4"
+      />
+    );
+  }
+
+  if (isVideo) {
+    return (
+      <div
+        className="h-full w-full"
+        onMouseEnter={handleVideoEnter}
+        onMouseLeave={handleVideoLeave}
+      >
+        <video
+          ref={videoRef}
+          src={mediaUrl}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="h-full w-full object-contain"
+          aria-label={`${alt} video`}
+          onError={() => setHasError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={mediaUrl}
+      alt={alt}
+      className="h-full w-full object-contain"
+      onError={() => setHasError(true)}
+    />
+  );
+};
 
 const getDisplaySize = (sizes: ProductSize[]): ProductSize | undefined => {
   if (sizes.length === 0) return undefined;
@@ -226,13 +311,13 @@ const ProductListPage = () => {
       {/* Products Grid - 5 columns */}
       {!isLoading && !isError && products.length > 0 && (
         <>
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {products.map((product) => {
               const variant = product.variant;
               const sizes = variant?.sizes ?? [];
               const displaySize = getDisplaySize(sizes);
               const hasMultipleVariants = false;
-              const variantImage = variant?.images?.[0] || FALLBACK_IMAGE;
+              const variantMedia = variant?.images?.[0] || FALLBACK_IMAGE;
               const sellingPrice = Number(displaySize?.selling_price) || 0;
               const mrp = Number(displaySize?.mrp) || 0;
               const hasDiscount = mrp > 0 && sellingPrice >= 0 && mrp > sellingPrice;
@@ -244,18 +329,14 @@ const ProductListPage = () => {
               return (
                 <Card
                   key={product._id}
-                  className="overflow-hidden hover:shadow-lg transition-shadow"
+                  className="overflow-hidden transition-shadow hover:shadow-lg"
                 >
-                  {/* Product Image with Badges */}
-                  <div className="relative h-56 overflow-hidden bg-white border-b">
-                    <div className="w-full flex items-center justify-center">
-                      <img
-                        src={variantImage}
-                        alt={product.product_name}
-                        className="max-w-full max-h-full object-contain"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://via.placeholder.com/400?text=No+Image";
-                        }}
+                  {/* Product media with stock information */}
+                  <div className="relative h-56 overflow-hidden border-b bg-white">
+                    <div className="h-full w-full">
+                      <ProductMedia
+                        src={variantMedia}
+                        alt={product.product_name || "Product"}
                       />
                     </div>
                     {/* Stock Badges */}
@@ -285,11 +366,22 @@ const ProductListPage = () => {
                   </div>
 
                   {/* Product Details */}
-                  <CardContent className="p-4 space-y-2.5">
-                    {/* Category */}
-                    <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs px-2 py-0.5">
-                      {product.category || "Uncategorized"}
-                    </Badge>
+                  <CardContent className="space-y-3 p-4">
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge className="bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-100">
+                        {product.category || "Uncategorized"}
+                      </Badge>
+                      {product.is_reel_collection === true && (
+                        <Badge className="bg-pink-100 px-2 py-0.5 text-xs text-pink-700 hover:bg-pink-100">
+                          Reels Collection
+                        </Badge>
+                      )}
+                      {product.is_trending_collection === true && (
+                        <Badge className="bg-amber-100 px-2 py-0.5 text-xs text-amber-700 hover:bg-amber-100">
+                          Trending Collection
+                        </Badge>
+                      )}
+                    </div>
 
                     {/* Product Name */}
                     <div>
@@ -302,6 +394,36 @@ const ProductListPage = () => {
                     <div className="text-xs text-gray-600">
                       <span className="font-medium text-gray-700">Brand:</span>{" "}
                       <span>{product.brand || "N/A"}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      <Badge
+                        className={
+                          product.is_sale
+                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-100"
+                        }
+                      >
+                        {product.is_sale ? "For Sale" : "Not for Sale"}
+                      </Badge>
+                      <Badge
+                        className={
+                          product.is_visible
+                            ? "bg-sky-100 text-sky-700 hover:bg-sky-100"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-100"
+                        }
+                      >
+                        {product.is_visible ? "Website Visible" : "Website Hidden"}
+                      </Badge>
+                      <Badge
+                        className={
+                          product.status?.toLowerCase() === "active"
+                            ? "bg-green-100 text-green-700 hover:bg-green-100"
+                            : "bg-red-100 text-red-700 hover:bg-red-100"
+                        }
+                      >
+                        {product.status?.toLowerCase() === "active" ? "Active" : "Inactive"}
+                      </Badge>
                     </div>
 
                     {/* Price Section */}
