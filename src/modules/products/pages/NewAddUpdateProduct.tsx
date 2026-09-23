@@ -233,6 +233,8 @@ interface ProductFormPayload {
   description: string;
   is_sale: boolean;
   is_visible: boolean;
+  is_reel_collection: boolean;
+  is_trending_collection: boolean;
   status: "active" | "inactive";
   is_delete: false;
   product_variants: ProductVariantPayload[];
@@ -248,6 +250,8 @@ interface ProductApiResponse {
   description?: string;
   is_sale?: boolean;
   is_visible?: boolean;
+  is_reel_collection?: boolean;
+  is_trending_collection?: boolean;
   isActive?: boolean;
   status?: string;
   product_variants?: Array<{
@@ -750,6 +754,8 @@ const toApiPayload = ({
   description,
   is_sale,
   is_visible,
+  is_reel_collection,
+  is_trending_collection,
   variants,
 }: {
   category: string;
@@ -759,6 +765,8 @@ const toApiPayload = ({
   description: string;
   is_sale: boolean;
   is_visible: boolean;
+  is_reel_collection: boolean;
+  is_trending_collection: boolean;
   variants: ColorVariant[];
 }): ProductFormPayload => ({
   category,
@@ -768,6 +776,8 @@ const toApiPayload = ({
   description,
   is_sale,
   is_visible,
+  is_reel_collection,
+  is_trending_collection,
   status: is_sale ? "active" : "inactive",
   is_delete: false,
   product_variants: variants.map((variant) => ({
@@ -1246,6 +1256,8 @@ const NewAddUpdateProduct = () => {
   const [description, setDescription] = useState("");
   const [isSale, setIsSale] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
+  const [isReelCollection, setIsReelCollection] = useState(false);
+  const [isTrendingCollection, setIsTrendingCollection] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [sizeDrafts, setSizeDrafts] = useState<Record<string, string>>({});
@@ -1406,6 +1418,8 @@ const NewAddUpdateProduct = () => {
         description,
         is_sale: isSale,
         is_visible: isVisible,
+        is_reel_collection: isReelCollection,
+        is_trending_collection: isTrendingCollection,
         variants,
       });
 
@@ -1624,6 +1638,8 @@ const NewAddUpdateProduct = () => {
     setDescription(product.description ?? "");
     setIsSale(product.is_sale ?? product.isActive ?? true);
     setIsVisible(product.is_visible ?? true);
+    setIsReelCollection(product.is_reel_collection ?? false);
+    setIsTrendingCollection(product.is_trending_collection ?? false);
     setVariants(
       mapApiProductToVariants(product).map((variant) =>
         applyCategoryToVariant(variant, nextCategory),
@@ -1952,6 +1968,40 @@ const NewAddUpdateProduct = () => {
                     checked={isVisible}
                     onChange={setIsVisible}
                     label={isVisible ? "Visible" : "Hidden"}
+                  />
+                </div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-[#F3F4F6] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Show in Reels Collection
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Show this product in the Reels Collection
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    checked={isReelCollection}
+                    onChange={setIsReelCollection}
+                    label={isReelCollection ? "Shown" : "Hidden"}
+                  />
+                </div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-[#F3F4F6] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Show in Trending Collection
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Show this product in the Trending Collection
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    checked={isTrendingCollection}
+                    onChange={setIsTrendingCollection}
+                    label={isTrendingCollection ? "Shown" : "Hidden"}
                   />
                 </div>
               </div>

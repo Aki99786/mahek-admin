@@ -99,14 +99,14 @@ export const router = createBrowserRouter([
         element: withSuspense(ProductLayout),
         children: [
           { index: true, element: withSuspense(ProductListPage) },
-          { path: "add-product", element: withSuspense(AddEditProductPage) },
+          // { path: "add-product", element: withSuspense(AddEditProductPage) },
+          // {
+          //   path: "edit-product/:id",
+          //   element: withSuspense(AddEditProductPage),
+          // },
+          { path: "add-product", element: withSuspense(NewAddUpdateProduct) },
           {
             path: "edit-product/:id",
-            element: withSuspense(AddEditProductPage),
-          },
-          { path: "new-product", element: withSuspense(NewAddUpdateProduct) },
-          {
-            path: "new-product/:id",
             element: withSuspense(NewAddUpdateProduct),
           },
           { path: "detail/:id", element: withSuspense(ProductDetailPage) },
